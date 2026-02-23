@@ -123,7 +123,7 @@ GRPO_ARGS=(
 
 OPTIMIZER_ARGS=(
    --optimizer adam
-   --lr 1e-5
+   --lr 1e-6
    --lr-decay-style constant
    --weight-decay 0.1
    --adam-beta1 0.9
@@ -147,10 +147,6 @@ PERF_ARGS=(
    --train-env-vars '{"PYTORCH_CUDA_ALLOC_CONF":"expandable_segments:True"}'
    --use-dynamic-batch-size
    --max-tokens-per-gpu 9216
-
-   --lora-rank 128
-   --lora-alpha 128
-   --target-modules all-linear
 )
 
 MISC_ARGS=(

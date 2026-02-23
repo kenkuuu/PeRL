@@ -1,5 +1,5 @@
 <div align="center">
-<img src="assets/topfig.png" alt="logo" width="600" margin="10px"></img>
+<img src="assets/perl_logo.png" alt="logo" width="200" margin="10px"></img>
   
 # PeRL: Parameter-Efficient Reinforcement Learning  
 > A minimal, modular, and lightning-fast framework for PEFT + RL.
