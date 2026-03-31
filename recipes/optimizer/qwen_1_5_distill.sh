@@ -89,7 +89,7 @@ RUNTIME_ENV_JSON="{
 CKPT_ARGS=(
    --hf-checkpoint /mnt/llm-train/users/explore-train/qingyu/.cache/DeepSeek-R1-Distill-Qwen-1.5B
    --ref-load /mnt/llm-train/users/explore-train/qingyu/.cache/DeepSeek-R1-Distill-Qwen-1.5B
-   --load /mnt/llm-train/users/explore-train/qingyu/.cache/DeepSeek-R1-Distill-Qwen-1.5B
+   --load /jpfs/qingyu/PeRL/ckpt/DeepSeek-R1-Distill-Qwen-1.5B_megatron
    --save ${SAVE_DIR}
    --save-interval 20
 )
@@ -105,9 +105,9 @@ ROLLOUT_ARGS=(
    --num-rollout 2000
    --rollout-batch-size 8
    --n-samples-per-prompt 8
-   --rollout-max-response-len 4096
+   --rollout-max-response-len 30000
    --rollout-temperature 1
-   --global-batch-size 64
+   --global-batch-size 32
 )
 
 GRPO_ARGS=(
