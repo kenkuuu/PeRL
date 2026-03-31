@@ -134,3 +134,34 @@ From `config.json`:
 3. **HF config validation**: `_hf_validate_args` checks that Megatron args match the HF config. Since we're intentionally changing `max_position_embeddings` beyond the HF config value, this validation won't fail because it doesn't check `max_position_embeddings` — it only checks hidden_size, num_layers, etc.
 
 4. **Inference (SGLang)**: YaRN parameters only affect the Megatron training side. If using SGLang for inference/rollout (non debug-train-only mode), you would also need to configure SGLang's RoPE scaling separately via its own config.
+
+5. **保存模型后需更新 HF config.json**: 训练阶段不需要修改 HF 权重下的 `config.json`，因为 slime/Megatron 的 YaRN 参数全部走 CLI，HF config 校验也不检查 `max_position_embeddings` 或 `rope_scaling`。但训练完保存模型后，如果要用该模型做推理（SGLang、vLLM、HuggingFace），必须更新保存的模型的 `config.json`，否则推理框架会用原始长度，无法处理超长输入：
+
+```json
+{
+  "max_position_embeddings": 32768,
+  "rope_scaling": {
+    "type": "yarn",
+    "factor": 4.0,
+    "original_max_position_embeddings": 8192,
+    "beta_fast": 32,
+    "beta_slow": 1,
+    "mscale": 1.0,
+    "mscale_all_dim": 1.0
+  }
+}
+```
+
+## Hard Adaptation vs YaRN
+
+除了 YaRN，另一种扩展 context 的方式是**硬适应 (hard adaptation)**：不修改 RoPE 编码，直接用超出预训练长度的数据训练，让模型靠梯度更新学会处理更长的位置。
+
+| | YaRN | Hard Adaptation |
+|---|---|---|
+| RoPE 修改 | 频率插值 + 校正 | 无，直接外推 |
+| 训练初期 loss | 较平稳 | 可能 spike |
+| 收敛速度 | 快，数学上更平滑 | 慢，需要更多数据 |
+| 适用场景 | 扩展倍数大 (4x+) | 扩展倍数小 (2x 以内) 或想保持简单 |
+| 推理配置 | 需要在 config.json 加 rope_scaling | 只需改 max_position_embeddings |
+
+硬适应的脚本见 `recipes/slime/sft/run-moonlight-16B-A3B-sft-muon-hard-32k.sh`。
