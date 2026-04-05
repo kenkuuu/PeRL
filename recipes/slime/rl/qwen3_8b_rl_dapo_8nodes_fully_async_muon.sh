@@ -1,10 +1,9 @@
 #!/bin/bash
 
-# Qwen3-8B RL training with CISPO (Clipped Importance Sampling Policy Optimization)
-# Algorithm: MiniMax-M1 (arxiv:2506.13585)
+# Qwen3-8B RL training with DAPO — FULLY ASYNC (off-policy)
 # Model: Qwen3-8B-Base-sft-dolci-think
-# Dataset: Polaris-Dataset (math)
-# Backend: Megatron (4 nodes, 32 GPUs)
+# Dataset: Polaris-Dataset-53K (math)
+# Backend: Megatron (8 nodes, 64 GPUs)
 
 set -ex
 
@@ -23,9 +22,9 @@ PROJECT_DIR=${PROJECT_DIR:-"/jpfs/chenyanxu.9/PeRL/modules/slime"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/jpfs/chenyanxu.9/PeRL/modules/Megatron-LM"}
 SCRIPT_DIR="${PROJECT_DIR}/scripts"
 HF_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375-hf"
-MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375_torch_dist"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-cispo-rl-${TIMESTAMP}}"
+MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375_torch_dist" 
+TIMESTAMP=$(date +%Y%m%d_%H%M%S) # TODO: fill in your megatron ckpt path
+SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-offpolicy-profiling-${TIMESTAMP}}"
 DATA_PATH="/jpfs-5p/qingyu/data/profiling_20260402181029/filtered.jsonl"
 LOG_DIR=${SAVE_DIR}/output.log
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -43,6 +42,9 @@ CKPT_ARGS=(
 )
 
 # ---- rollout & data ----
+# Dataset format: parquet with fields {problem, solution, difficulty, prompt}
+# prompt is already in chat format: [{role: user, content: ...}]
+# solution is the ground truth answer (number or latex expression)
 ROLLOUT_ARGS=(
    --rollout-function-path fully_async_rollout.generate_rollout_fully_async
    --prompt-data ${DATA_PATH}
@@ -64,39 +66,36 @@ ROLLOUT_ARGS=(
 )
 
 # ---- reward ----
+# deepscaler: extracts answer after </think>, then \boxed{} from model output,
+# compares with label via mathd normalization + sympy simplification
 RM_ARGS=(
    --rm-type deepscaler
 )
 
-# ---- CISPO algorithm ----
-# Key difference from DAPO/GRPO:
-#   - Uses custom_loss with CISPO loss function
-#   - eps-clip-high is the raw upper bound for IS ratio (e.g. 5.0),
-#     NOT the 1+ε offset used in DAPO (which would be 1.28)
-#   - CISPO clips IS weights with upper bound only, no lower bound
-#   - Clipped IS weights are detached (stop-gradient)
-#   - Gradients flow for ALL tokens (no trust-region cutoff)
-ALGO_ARGS=(
+# ---- DAPO / GRPO algorithm ----
+GRPO_ARGS=(
    --advantage-estimator grpo
-   --loss-type custom_loss
-   --custom-loss-function-path examples.cispo.cispo_loss.cispo_loss_function
    --kl-coef 0.00
    --entropy-coef 0.00
-   # CISPO upper bound for IS ratio (from ScaleRL, arxiv:2510.13786)
-   --eps-clip-high 5.0
-   # Dynamic sampling: filter prompts where all samples have same reward
+   # DAPO asymmetric clipping
+   --eps-clip 0.2
+   --eps-clip-high 0.28
+   # DAPO dynamic sampling: filter out prompts where all samples have same reward
    --dynamic-sampling-filter-path slime.rollout.filter_hub.dynamic_sampling_filters.check_reward_nonzero_std
+   # off-policy importance sampling correction
    --use-tis
 )
 
 # ---- optimizer (Adam) ----
 OPTIMIZER_ARGS=(
-   --optimizer adam
-   --lr 1e-6
+   --optimizer muon
+   --lr 5e-5
    --lr-decay-style constant
-   --weight-decay 0.1
-   --adam-beta1 0.9
-   --adam-beta2 0.98
+   --weight-decay 0.01
+   --muon-momentum 0.95
+   --muon-num-ns-steps 5
+   --muon-scale-mode spectral
+   --muon-extra-scale-factor 0.2
 )
 
 # ---- sglang rollout engine ----
@@ -104,6 +103,7 @@ SGLANG_ARGS=(
    --rollout-num-gpus-per-engine 1
    --rollout-num-gpus 48
    --sglang-mem-fraction-static 0.8
+
 )
 
 # ---- performance / parallelism ----
@@ -131,12 +131,13 @@ MISC_ARGS=(
    --accumulate-allreduce-grads-in-fp32
    --attention-softmax-in-fp32
    --attention-backend flash
+   # NOTE: --colocate removed — async training does not support colocate
 )
 # EVAL_ARGS=(
 #    --eval-interval 32
 #    --eval-prompt-data aime /jpfs-5p/qingyu/data/aime-2024.jsonl
 #    --n-samples-per-eval-prompt 16
-#    --eval-max-response-len 30000
+#    --eval-max-response-len 31000
 #    --eval-top-p 0.95
 # )
 
@@ -151,7 +152,7 @@ wandb login --relogin --host=http://11.71.1.218:8082 ${WANDB_API_KEY}
 WANDB_ARGS=(
    --use-wandb
    --wandb-project slime-rl-optim
-   --wandb-group qwen3-8b-dolci-think-rl-cispo
+   --wandb-group qwen3-8b-onpolicy-profiling-8nodes
 )
 
 
@@ -177,7 +178,7 @@ ray job submit --address="http://127.0.0.1:8265" \
    ${CKPT_ARGS[@]} \
    ${ROLLOUT_ARGS[@]} \
    ${RM_ARGS[@]} \
-   ${ALGO_ARGS[@]} \
+   ${GRPO_ARGS[@]} \
    ${OPTIMIZER_ARGS[@]} \
    ${SGLANG_ARGS[@]} \
    ${PERF_ARGS[@]} \
