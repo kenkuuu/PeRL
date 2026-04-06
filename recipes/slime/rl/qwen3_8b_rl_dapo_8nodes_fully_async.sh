@@ -55,6 +55,7 @@ ROLLOUT_ARGS=(
    --balance-data
    --num-rollout 2000
    --rollout-batch-size 64
+   --over-sampling-batch-size 96
    --n-samples-per-prompt 8
    --rollout-max-response-len 30000
    --rollout-temperature 1.0
@@ -99,9 +100,9 @@ OPTIMIZER_ARGS=(
 # ---- sglang rollout engine ----
 SGLANG_ARGS=(
    --rollout-num-gpus-per-engine 1
-   --rollout-num-gpus 48
-   --sglang-mem-fraction-static 0.8
-
+   --rollout-num-gpus 64
+   --sglang-mem-fraction-static 0.85
+   --sglang-server-concurrency 256
 )
 
 # ---- performance / parallelism ----
@@ -150,7 +151,7 @@ wandb login --relogin --host=http://11.71.1.218:8082 ${WANDB_API_KEY}
 WANDB_ARGS=(
    --use-wandb
    --wandb-project slime-rl-optim
-   --wandb-group qwen3-8b-onpolicy-profiling-8nodes
+   --wandb-group interval-2-128
 )
 
 
