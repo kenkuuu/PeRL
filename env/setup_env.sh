@@ -81,4 +81,8 @@ print(f'torch      : {torch.__version__}')
 print(f'CUDA avail : {torch.cuda.is_available()}')
 print(f'vllm       : {vllm.__version__}')
 print(f'flash-attn : {flash_attn.__version__}')
+<<<<<<< HEAD
 "
+=======
+"
+>>>>>>> 608aa62 (Modify for experiment)
