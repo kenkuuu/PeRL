@@ -167,6 +167,8 @@ def add_geora_initialized_lora(
         PEFT model with GeoRA-initialized adapters
     """
     # --- Hyperparameter presets ---
+    lora_alpha = rank
+    lora_dropout = 0.05
     if target_modules is None:
         if hyper_param_type == "LLM-Adapters":
             lora_alpha = rank
