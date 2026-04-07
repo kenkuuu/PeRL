@@ -148,7 +148,7 @@ def add_geora_initialized_lora(
     model,
     rank: int = 16,
     sparsity_ratio: float = 0.2,
-    hyper_param_type: str = "LLM-Adapters",
+    hyper_param_type: str = "QLoRA",
 ) -> torch.nn.Module:
     """
     Apply GeoRA to a HuggingFace CausalLM model.

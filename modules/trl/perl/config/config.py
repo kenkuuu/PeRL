@@ -25,6 +25,8 @@ class PeftConfig:
     lora_alpha: int = 32
     lora_dropout: float = 0.0
     total_step: int = 1000  # for adalora
+    sparsity_ratio: float = 0.2  # for geora
+    hyper_param_type: str = "LLM-Adapters"  # for geora
     target_modules: List[str] = field(
         default_factory=lambda: ["q_proj", "v_proj", "k_proj", "o_proj", "up_proj", "down_proj"]
     )
