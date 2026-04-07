@@ -148,7 +148,8 @@ def add_geora_initialized_lora(
     model,
     rank: int = 16,
     sparsity_ratio: float = 0.2,
-    hyper_param_type: str = "QLoRA",
+    hyper_param_type: str = "LLM-Adapters",
+    target_modules=None,
 ) -> torch.nn.Module:
     """
     Apply GeoRA to a HuggingFace CausalLM model.
@@ -166,24 +167,25 @@ def add_geora_initialized_lora(
         PEFT model with GeoRA-initialized adapters
     """
     # --- Hyperparameter presets ---
-    if hyper_param_type == "LLM-Adapters":
-        lora_alpha = rank
-        lora_dropout = 0.05
-        target_modules = ["q_proj", "k_proj", "v_proj", "up_proj", "down_proj"]
-    elif hyper_param_type == "QLoRA":
-        lora_alpha = rank
-        lora_dropout = 0.1
-        target_modules = [
-            "q_proj",
-            "k_proj",
-            "v_proj",
-            "o_proj",
-            "gate_proj",
-            "up_proj",
-            "down_proj",
-        ]
-    else:
-        raise ValueError(f"Unknown hyper_param_type: {hyper_param_type}")
+    if target_modules is None:
+        if hyper_param_type == "LLM-Adapters":
+            lora_alpha = rank
+            lora_dropout = 0.05
+            target_modules = ["q_proj", "k_proj", "v_proj", "up_proj", "down_proj"]
+        elif hyper_param_type == "QLoRA":
+            lora_alpha = rank
+            lora_dropout = 0.1
+            target_modules = [
+                "q_proj",
+                "k_proj",
+                "v_proj",
+                "o_proj",
+                "gate_proj",
+                "up_proj",
+                "down_proj",
+            ]
+        else:
+            raise ValueError(f"Unknown hyper_param_type: {hyper_param_type}")
 
     # --- Build PEFT model with standard LoRA config ---
     peft_config = LoraConfig(

@@ -239,6 +239,7 @@ def apply_geora(model, args):
         rank=args.peft.r,
         sparsity_ratio=getattr(args.peft, "sparsity_ratio", 0.2),
         hyper_param_type=getattr(args.peft, "hyper_param_type", "LLM-Adapters"),
+        target_modules=getattr(args.peft, "target_modules", None),
     )
 
 
