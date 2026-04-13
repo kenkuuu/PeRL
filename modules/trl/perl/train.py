@@ -113,6 +113,7 @@ def train(
         reward_funcs=reward_functions,
         args=training_args,
         train_dataset=train_dataset,
+        eval_dataset=test_dataset if test_dataset is not None else None,
         optimizers=(optimizer, None) if optimizer is not None else (None, None)
     )
     

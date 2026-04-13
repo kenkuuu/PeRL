@@ -2,19 +2,22 @@ from .openr1 import load_openr1_dataset
 from .tinyzero import load_tinyzero_dataset
 from .count_down import load_count_down_dataset
 from .still import load_still_dataset
+from .competition_math import load_competition_math_dataset
 
 from transformers import AutoTokenizer
 
 def load_dataset(dataset_name_or_path: str, example_numbers: int = None, tokenizer: AutoTokenizer = None):
     dataset_name_lower = dataset_name_or_path.lower()
-    if "r1" in dataset_name_lower:
+    if "competition_math" in dataset_name_lower or "competition-math" in dataset_name_lower:
+        return load_competition_math_dataset(dataset_name_or_path, example_numbers)
+    elif "r1" in dataset_name_lower:
         return load_openr1_dataset(dataset_name_or_path, example_numbers)
     elif "tinyzero" in dataset_name_lower:
         return load_tinyzero_dataset(dataset_name_or_path, example_numbers)
     elif "countdown" in dataset_name_lower:
         return load_count_down_dataset(
-            dataset_name_or_path, 
-            example_numbers, 
+            dataset_name_or_path,
+            example_numbers,
             tokenizer
         )
     elif "still" in dataset_name_lower:

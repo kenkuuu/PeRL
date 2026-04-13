@@ -63,6 +63,8 @@ class TrainingConfig:
     warmup_ratio: float = 0.0
     per_device_train_batch_size: int = 1
     top_entropy_quantile: float = 0.2
+    eval_strategy: str = "no"   # "no" | "steps" | "epoch"
+    eval_steps: int = 1         # evaluate every N optimizer steps (used when eval_strategy="steps")
 
 @dataclass
 class LoggingConfig:
