@@ -12,7 +12,7 @@ CUDA_VISIBLE_DEVICES=0,1 ACCELERATE_LOG_LEVEL=info \
     modules/trl/run.py train \
     --config.common.seed 42 \
     --config.common.debug false \
-    --config.model.model_name_or_path "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B" \
+    --config.model.model_name_or_path "Qwen/Qwen2.5-1.5B-Instruct" \
     --config.model.dtype "bfloat16" \
     --config.peft.use_peft true \
     --config.peft.type "rslora" \
@@ -29,7 +29,7 @@ CUDA_VISIBLE_DEVICES=0,1 ACCELERATE_LOG_LEVEL=info \
     --config.training.remove_unused_columns false \
     --config.training.gradient_accumulation_steps 16 \
     --config.training.num_train_epochs 1 \
-    --config.training.max_completion_length 2048 \
+    --config.training.max_completion_length 1024 \
     --config.training.num_generations 8 \
     --config.training.warmup_ratio 0.0 \
     --config.training.max_prompt_length 512 \
