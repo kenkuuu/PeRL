@@ -21,7 +21,7 @@ CUDA_VISIBLE_DEVICES=0 ACCELERATE_LOG_LEVEL=info \
     --config.training.remove_unused_columns false \
     --config.training.gradient_accumulation_steps 8 \
     --config.training.num_train_epochs 1 \
-    --config.training.max_completion_length 16384 \
+    --config.training.max_completion_length 2048 \
     --config.training.num_generations 8 \
     --config.training.warmup_ratio 0.0 \
     --config.training.max_prompt_length 512 \
