@@ -23,7 +23,7 @@ PROJECT_DIR=${PROJECT_DIR:-"/jpfs/chenyanxu.9/PeRL/modules/slime"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/jpfs/chenyanxu.9/PeRL/modules/Megatron-LM"}
 SCRIPT_DIR="${PROJECT_DIR}/scripts"
 HF_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375-hf"
-MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375_torch_dist"
+MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-muon-projected-1-20260413_134332"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-muon-projected-1-${TIMESTAMP}}"
 DATA_PATH="/jpfs-5p/qingyu/data/profiling_20260402181029/filtered.jsonl"
@@ -52,6 +52,7 @@ ROLLOUT_ARGS=(
    --balance-data
    --num-rollout 2000
    --rollout-batch-size 64
+   --over-sampling-batch-size 80
    --n-samples-per-prompt 8
    --rollout-max-response-len 30000
    --rollout-temperature 1.0
@@ -78,7 +79,7 @@ GRPO_ARGS=(
 # ---- optimizer (MuonProjected) ----
 OPTIMIZER_ARGS=(
    --optimizer muon_projected
-   --lr 1e-6
+   --lr 5e-6
    --lr-decay-style constant
    --weight-decay 0.1
    # MuonProjected: (I - alpha * W0 W0^T / ||W0||_F^2) @ Muon(G)
@@ -102,9 +103,9 @@ SGLANG_ARGS=(
 
 # ---- performance / parallelism ----
 PERF_ARGS=(
-   --tensor-model-parallel-size 1
+   --tensor-model-parallel-size 2
    --sequence-parallel
-   --pipeline-model-parallel-size 4
+   --pipeline-model-parallel-size 1
    --context-parallel-size 1
    --expert-model-parallel-size 1
    --expert-tensor-parallel-size 1
@@ -112,7 +113,7 @@ PERF_ARGS=(
    --recompute-method uniform
    --recompute-num-layers 1
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 30000
+   --max-tokens-per-gpu 32000
 )
 
 # ---- misc ----
@@ -145,7 +146,7 @@ wandb login --relogin --host=http://11.71.1.153:8080 ${WANDB_API_KEY}
 WANDB_ARGS=(
    --use-wandb
    --wandb-project slime-rl-optim
-   --wandb-group qwen3-8b-onpolicy-profiling-muon-projected-1
+   --wandb-group qwen3-8b-onpolicy-profiling-muon-projected-1-lr_5e-6
 )
 
 

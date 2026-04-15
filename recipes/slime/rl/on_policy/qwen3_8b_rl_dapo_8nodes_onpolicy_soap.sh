@@ -1,9 +1,11 @@
 #!/bin/bash
 
-# Qwen3-8B RL training with DAPO (GRPO + asymmetric clipping + dynamic sampling)
+# Qwen3-8B RL training with DAPO + SOAP optimizer
 # Model: Qwen3-8B-Base-sft-dolci-think
 # Dataset: Polaris-Dataset-53K (math)
-# Backend: Megatron (4 nodes, 32 GPUs)
+# Backend: Megatron (8 nodes, 64 GPUs)
+# Optimizer: SOAP (ShampoO with Adam in the Preconditioner eigenbasis)
+#            Linear params -> SOAP, Nonlinear params -> Adam
 
 set -ex
 
@@ -19,12 +21,12 @@ echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
 # ---- paths (edit these) ----
 PROJECT_DIR=${PROJECT_DIR:-"/jpfs/chenyanxu.9/PeRL/modules/slime"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/root/Megatron-LM"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/jpfs/chenyanxu.9/PeRL/modules/Megatron-LM"}
 SCRIPT_DIR="${PROJECT_DIR}/scripts"
 HF_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375-hf"
-MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-20260414_050747" 
-TIMESTAMP=$(date +%Y%m%d_%H%M%S) # TODO: fill in your megatron ckpt path
-SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-${TIMESTAMP}}"
+MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375_torch_dist"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-soap-${TIMESTAMP}}"
 DATA_PATH="/jpfs-5p/qingyu/data/profiling_20260402181029/filtered.jsonl"
 LOG_DIR=${SAVE_DIR}/output.log
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -42,9 +44,6 @@ CKPT_ARGS=(
 )
 
 # ---- rollout & data ----
-# Dataset format: parquet with fields {problem, solution, difficulty, prompt}
-# prompt is already in chat format: [{role: user, content: ...}]
-# solution is the ground truth answer (number or latex expression)
 ROLLOUT_ARGS=(
    --prompt-data ${DATA_PATH}
    --input-key prompt
@@ -61,8 +60,6 @@ ROLLOUT_ARGS=(
 )
 
 # ---- reward ----
-# deepscaler: extracts answer after </think>, then \boxed{} from model output,
-# compares with label via mathd normalization + sympy simplification
 RM_ARGS=(
    --rm-type deepscaler
 )
@@ -79,12 +76,24 @@ GRPO_ARGS=(
    --dynamic-sampling-filter-path slime.rollout.filter_hub.dynamic_sampling_filters.check_reward_nonzero_std
 )
 
-# ---- optimizer (Adam) ----
+# ---- optimizer (SOAP) ----
+# SOAP: linear params use SOAP (Shampoo + Adam preconditioner), nonlinear use Adam
 OPTIMIZER_ARGS=(
-   --optimizer adam
-   --lr 5e-6
+   --optimizer soap
+   --lr 5e-7
    --lr-decay-style constant
    --weight-decay 0.1
+   # SOAP-specific hyperparameters
+   --soap-beta1 0.9
+   --soap-beta2 0.95
+   --soap-shampoo-beta 0.95
+   --soap-eps 1e-8
+   --soap-precondition-frequency 1
+   --soap-adam-warmup-steps 0
+   --soap-correct-bias
+   --soap-fp32-matmul-prec high
+   --soap-power-iter-steps 1
+   # Adam for non-linear params (embedding, output, 1D)
    --adam-beta1 0.9
    --adam-beta2 0.98
    --adam-eps 1e-15
@@ -95,21 +104,19 @@ SGLANG_ARGS=(
    --rollout-num-gpus-per-engine 1
    --rollout-num-gpus 64
    --sglang-mem-fraction-static 0.8
-
 )
 
 # ---- performance / parallelism ----
 PERF_ARGS=(
-   --tensor-model-parallel-size 1
+   --tensor-model-parallel-size 2
    --sequence-parallel
-   --pipeline-model-parallel-size 2
+   --pipeline-model-parallel-size 1
    --context-parallel-size 1
    --expert-model-parallel-size 1
    --expert-tensor-parallel-size 1
    --recompute-granularity full
    --recompute-method uniform
    --recompute-num-layers 1
-   --use-distributed-optimizer
    --use-dynamic-batch-size
    --max-tokens-per-gpu 32000
 )
@@ -137,14 +144,14 @@ unset http_proxy
 unset https_proxy
 unset HTTP_PROXY
 unset HTTPS_PROXY
-export WANDB_API_KEY=local-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 # your_wandb_key
-export WANDB_ENTITY=duo # your_wandb_entity
-wandb login --relogin --host=http://11.71.1.153:8080 ${WANDB_API_KEY}
+export WANDB_API_KEY=local-b0d90ad40bfaa2dd58fa4525f18c82ccb8aca2c6 # your_wandb_key
+export WANDB_ENTITY=automl # your_wandb_entity
+wandb login --relogin --host=http://11.71.1.218:8082 ${WANDB_API_KEY}
 
 WANDB_ARGS=(
    --use-wandb
    --wandb-project slime-rl-optim
-   --wandb-group qwen3-8b-onpolicy-profiling-8nodes
+   --wandb-group qwen3-8b-onpolicy-profiling-soap
 )
 
 
@@ -158,7 +165,7 @@ RUNTIME_ENV_JSON="{
     \"CUDA_DEVICE_MAX_CONNECTIONS\": \"1\",
     \"NCCL_NVLS_ENABLE\": \"${HAS_NVLINK}\",
     \"WANDB_API_KEY\": \"${WANDB_API_KEY}\",
-    \"WANDB_BASE_URL\": \"http://11.71.1.153:8080\"
+    \"WANDB_BASE_URL\": \"http://11.71.1.218:8082\"
   }
 }"
 

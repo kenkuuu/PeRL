@@ -86,7 +86,7 @@ GRPO_ARGS=(
    # off-policy importance sampling correction (ICEPoP: reject tokens outside clip range)
    --use-tis
    --custom-tis-function-path slime.backends.megatron_utils.loss.icepop_function
-   --tis-clip 5.0
+   --tis-clip 2.0
    --tis-clip-low 0.5
 )
 
@@ -105,7 +105,7 @@ OPTIMIZER_ARGS=(
 SGLANG_ARGS=(
    --rollout-num-gpus-per-engine 1
    --rollout-num-gpus 48
-   --sglang-mem-fraction-static 0.85
+   --sglang-mem-fraction-static 0.9
    --sglang-server-concurrency 256
 )
 
@@ -122,7 +122,7 @@ PERF_ARGS=(
    --recompute-num-layers 2
    --use-distributed-optimizer
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 30000
+   --max-tokens-per-gpu 32000
 )
 
 # ---- misc ----

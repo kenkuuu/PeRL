@@ -36,7 +36,7 @@ source "${SCRIPT_DIR}/models/qwen3-8B.sh"
 # ---- checkpoints ----
 CKPT_ARGS=(
    --hf-checkpoint ${HF_CKPT}
-   --load ${MEGATRON_CKPT}
+   --load /jpfs-5p/chenyanxu.9/model/Qwen3-8B-glm5-dapo-muon-20260410_174338
    --save ${SAVE_DIR}
    --save-interval 32
 )

@@ -1,9 +1,10 @@
 #!/bin/bash
 
-# Qwen3-8B RL training with DAPO (GRPO + asymmetric clipping + dynamic sampling)
+# Qwen3-8B RL training with DAPO + MuonProjected optimizer
 # Model: Qwen3-8B-Base-sft-dolci-think
 # Dataset: Polaris-Dataset-53K (math)
-# Backend: Megatron (4 nodes, 32 GPUs)
+# Backend: Megatron (8 nodes, 64 GPUs)
+# Optimizer: MuonProjected = (I - alpha * W0 W0^T / ||W0||_F^2) @ Muon(G)
 
 set -ex
 
@@ -19,12 +20,12 @@ echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
 # ---- paths (edit these) ----
 PROJECT_DIR=${PROJECT_DIR:-"/jpfs/chenyanxu.9/PeRL/modules/slime"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/root/Megatron-LM"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/jpfs/chenyanxu.9/PeRL/modules/Megatron-LM"}
 SCRIPT_DIR="${PROJECT_DIR}/scripts"
 HF_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375-hf"
-MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-20260414_050747" 
-TIMESTAMP=$(date +%Y%m%d_%H%M%S) # TODO: fill in your megatron ckpt path
-SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-${TIMESTAMP}}"
+MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-muon-projected-0.5-lr_5e-6-20260412_164003"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-muon-projected-0.5-lr_5e-6-${TIMESTAMP}}"
 DATA_PATH="/jpfs-5p/qingyu/data/profiling_20260402181029/filtered.jsonl"
 LOG_DIR=${SAVE_DIR}/output.log
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -42,9 +43,6 @@ CKPT_ARGS=(
 )
 
 # ---- rollout & data ----
-# Dataset format: parquet with fields {problem, solution, difficulty, prompt}
-# prompt is already in chat format: [{role: user, content: ...}]
-# solution is the ground truth answer (number or latex expression)
 ROLLOUT_ARGS=(
    --prompt-data ${DATA_PATH}
    --input-key prompt
@@ -54,6 +52,7 @@ ROLLOUT_ARGS=(
    --balance-data
    --num-rollout 2000
    --rollout-batch-size 64
+   #--over-sampling-batch-size 100
    --n-samples-per-prompt 8
    --rollout-max-response-len 30000
    --rollout-temperature 1.0
@@ -61,8 +60,6 @@ ROLLOUT_ARGS=(
 )
 
 # ---- reward ----
-# deepscaler: extracts answer after </think>, then \boxed{} from model output,
-# compares with label via mathd normalization + sympy simplification
 RM_ARGS=(
    --rm-type deepscaler
 )
@@ -79,12 +76,19 @@ GRPO_ARGS=(
    --dynamic-sampling-filter-path slime.rollout.filter_hub.dynamic_sampling_filters.check_reward_nonzero_std
 )
 
-# ---- optimizer (Adam) ----
+# ---- optimizer (MuonProjected) ----
 OPTIMIZER_ARGS=(
-   --optimizer adam
-   --lr 5e-6
+   --optimizer muon_projected
+   --lr 1e-6
    --lr-decay-style constant
    --weight-decay 0.1
+   # MuonProjected: (I - alpha * W0 W0^T / ||W0||_F^2) @ Muon(G)
+   --muon-projected-momentum 0.95
+   --muon-projected-projection-alpha 0.5
+   --muon-projected-num-ns-steps 5
+   --muon-projected-scale-mode spectral
+   --muon-projected-extra-scale-factor 0.2
+   # Adam for non-linear params (embedding, output, 1D)
    --adam-beta1 0.9
    --adam-beta2 0.98
    --adam-eps 1e-15
@@ -95,12 +99,11 @@ SGLANG_ARGS=(
    --rollout-num-gpus-per-engine 1
    --rollout-num-gpus 64
    --sglang-mem-fraction-static 0.8
-
 )
 
 # ---- performance / parallelism ----
 PERF_ARGS=(
-   --tensor-model-parallel-size 1
+   --tensor-model-parallel-size 2
    --sequence-parallel
    --pipeline-model-parallel-size 2
    --context-parallel-size 1
@@ -109,7 +112,6 @@ PERF_ARGS=(
    --recompute-granularity full
    --recompute-method uniform
    --recompute-num-layers 1
-   --use-distributed-optimizer
    --use-dynamic-batch-size
    --max-tokens-per-gpu 32000
 )
@@ -144,7 +146,7 @@ wandb login --relogin --host=http://11.71.1.153:8080 ${WANDB_API_KEY}
 WANDB_ARGS=(
    --use-wandb
    --wandb-project slime-rl-optim
-   --wandb-group qwen3-8b-onpolicy-profiling-8nodes
+   --wandb-group qwen3-8b-onpolicy-profiling-muon-projected-0.5-lr_1e-6
 )
 
 
