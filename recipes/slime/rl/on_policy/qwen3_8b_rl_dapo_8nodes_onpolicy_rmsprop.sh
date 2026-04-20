@@ -78,7 +78,7 @@ GRPO_ARGS=(
 # ---- optimizer (RMSprop) ----
 OPTIMIZER_ARGS=(
    --optimizer rmsprop
-   --lr 5e-7
+   --lr 1e-6
    --lr-decay-style constant
    --weight-decay 0.1
    # RMSprop-specific hyperparameters
@@ -98,14 +98,14 @@ SGLANG_ARGS=(
 PERF_ARGS=(
    --tensor-model-parallel-size 2
    --sequence-parallel
-   --pipeline-model-parallel-size 1
+   --pipeline-model-parallel-size 4
    --context-parallel-size 1
    --expert-model-parallel-size 1
    --expert-tensor-parallel-size 1
    --recompute-granularity full
    --recompute-method uniform
    --recompute-num-layers 1
-   --use-distributed-optimizer
+  # --use-distributed-optimizer
    --use-dynamic-batch-size
    --max-tokens-per-gpu 32000
 )
@@ -133,9 +133,9 @@ unset http_proxy
 unset https_proxy
 unset HTTP_PROXY
 unset HTTPS_PROXY
-export WANDB_API_KEY=local-b0d90ad40bfaa2dd58fa4525f18c82ccb8aca2c6 # your_wandb_key
-export WANDB_ENTITY=automl # your_wandb_entity
-wandb login --relogin --host=http://11.71.1.218:8082 ${WANDB_API_KEY}
+export WANDB_API_KEY=local-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 # your_wandb_key
+export WANDB_ENTITY=duo # your_wandb_entity
+wandb login --relogin --host=http://11.71.1.153:8080 ${WANDB_API_KEY}
 
 WANDB_ARGS=(
    --use-wandb
@@ -154,7 +154,7 @@ RUNTIME_ENV_JSON="{
     \"CUDA_DEVICE_MAX_CONNECTIONS\": \"1\",
     \"NCCL_NVLS_ENABLE\": \"${HAS_NVLINK}\",
     \"WANDB_API_KEY\": \"${WANDB_API_KEY}\",
-    \"WANDB_BASE_URL\": \"http://11.71.1.218:8082\"
+    \"WANDB_BASE_URL\": \"http://11.71.1.153:8080\"
   }
 }"
 

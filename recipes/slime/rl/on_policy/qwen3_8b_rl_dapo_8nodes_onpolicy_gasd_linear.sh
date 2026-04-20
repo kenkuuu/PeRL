@@ -23,7 +23,7 @@ PROJECT_DIR=${PROJECT_DIR:-"/jpfs/chenyanxu.9/PeRL/modules/slime"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/jpfs/chenyanxu.9/PeRL/modules/Megatron-LM"}
 SCRIPT_DIR="${PROJECT_DIR}/scripts"
 HF_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375-hf"
-MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375_torch_dist"
+MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-20260415_022836"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-${TIMESTAMP}}"
 DATA_PATH="/jpfs-5p/qingyu/data/profiling_20260402181029/filtered.jsonl"
@@ -39,7 +39,7 @@ CKPT_ARGS=(
    --hf-checkpoint ${HF_CKPT}
    --load ${MEGATRON_CKPT}
    --save ${SAVE_DIR}
-   --save-interval 16
+   --save-interval 32
 )
 
 # ---- rollout & data ----
@@ -50,7 +50,7 @@ ROLLOUT_ARGS=(
    --apply-chat-template
    --rollout-shuffle
    --balance-data
-   --num-rollout 2000
+   --num-rollout 500
    --rollout-batch-size 64
    --n-samples-per-prompt 8
    --rollout-max-response-len 30000
@@ -80,13 +80,14 @@ GRPO_ARGS=(
 OPTIMIZER_ARGS=(
    --optimizer gasd
    --lr 1e-6
-   --lr-decay-style constant
+   --min-lr 1e-7
+   --lr-decay-style linear
+   --override-opt-param-scheduler
    --weight-decay 0.1
    # Momentum / Nesterov
    --gasd-momentum 0.95
    # GASD CG preconditioning
-   --gasd-epsilon-alpha 5.0
-   --gasd-epsilon-mode constant
+   --gasd-epsilon-alpha 1.0
    --gasd-cg-iters 10
    --gasd-rms-scale 1.0
    # Muon orthogonalization (Newton-Schulz)

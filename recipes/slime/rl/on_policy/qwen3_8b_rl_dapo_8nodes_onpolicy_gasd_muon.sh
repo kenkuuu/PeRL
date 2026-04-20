@@ -23,7 +23,7 @@ PROJECT_DIR=${PROJECT_DIR:-"/jpfs/chenyanxu.9/PeRL/modules/slime"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/jpfs/chenyanxu.9/PeRL/modules/Megatron-LM"}
 SCRIPT_DIR="${PROJECT_DIR}/scripts"
 HF_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375-hf"
-MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375_torch_dist"
+MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-20260415_022836"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-${TIMESTAMP}}"
 DATA_PATH="/jpfs-5p/qingyu/data/profiling_20260402181029/filtered.jsonl"
@@ -39,7 +39,7 @@ CKPT_ARGS=(
    --hf-checkpoint ${HF_CKPT}
    --load ${MEGATRON_CKPT}
    --save ${SAVE_DIR}
-   --save-interval 16
+   --save-interval 32
 )
 
 # ---- rollout & data ----
@@ -78,24 +78,14 @@ GRPO_ARGS=(
 # ---- optimizer (GASD = Muon orthogonalization + GASD preconditioning) ----
 # Pipeline: G -> EMA momentum -> Nesterov -> Muon(NS) -> (WW^T+eps*I)^{-1} via CG -> RMS norm
 OPTIMIZER_ARGS=(
-   --optimizer gasd
+   --optimizer muon
    --lr 1e-6
    --lr-decay-style constant
    --weight-decay 0.1
-   # Momentum / Nesterov
-   --gasd-momentum 0.95
-   # GASD CG preconditioning
-   --gasd-epsilon-alpha 5.0
-   --gasd-epsilon-mode constant
-   --gasd-cg-iters 10
-   --gasd-rms-scale 1.0
-   # Muon orthogonalization (Newton-Schulz)
-   --gasd-num-ns-steps 5
-   --gasd-scale-mode spectral
-   --gasd-extra-scale-factor 0.2
-   --gasd-fp32-matmul-prec medium
-   --gasd-tp-mode blockwise
-   # Adam for non-linear params (embedding, output, 1D)
+   --muon-momentum 0.95
+   --muon-num-ns-steps 5
+   --muon-scale-mode spectral
+   --muon-extra-scale-factor 0.2
    --adam-beta1 0.9
    --adam-beta2 0.98
    --adam-eps 1e-15

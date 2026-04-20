@@ -39,7 +39,7 @@ CKPT_ARGS=(
    --hf-checkpoint ${HF_CKPT}
    --load ${MEGATRON_CKPT}
    --save ${SAVE_DIR}
-   --save-interval 16
+   --save-interval 32
 )
 
 # ---- rollout & data ----
@@ -80,13 +80,13 @@ GRPO_ARGS=(
 OPTIMIZER_ARGS=(
    --optimizer gasd
    --lr 1e-6
-   --lr-decay-style constant
+   --lr-decay-style cosine
+   --min-lr 1e-7
    --weight-decay 0.1
    # Momentum / Nesterov
    --gasd-momentum 0.95
    # GASD CG preconditioning
-   --gasd-epsilon-alpha 5.0
-   --gasd-epsilon-mode constant
+   --gasd-epsilon-alpha 1.0
    --gasd-cg-iters 10
    --gasd-rms-scale 1.0
    # Muon orthogonalization (Newton-Schulz)

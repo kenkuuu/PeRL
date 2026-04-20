@@ -4,30 +4,63 @@
 Plot eval results across multiple model directories.
 
 Usage:
-    python plot_eval.py [--output plot.png] [--csv-dir DIR]
+    python plot_eval.py [--output plot.png] [--csv-dir DIR] [--labels a,b,c]
+
+自定义图例名（任选其一，优先级从高到低）：
+  1) --labels 逗号分隔，顺序与 MODEL_BASES 完全一致
+  2) 本文件内 MODEL_LABELS：
+       - dict：绝对路径 -> 显示名；或
+       - list/tuple：与 MODEL_BASES 同序、同长度，每项为显示名
+  3) short_label（从目录名推断）
 
 Reads eval_results.json from all iter_*-hf/ directories under each MODEL_BASE,
 plots avg_k and pass_k for each benchmark + overall.
 同时导出与每张子图一一对应的 CSV（宽表：iter + 各模型列）。
 """
 
+from __future__ import annotations
+
 import argparse
 import csv
 import json
+import os
 import re
 from pathlib import Path
-import os
+from typing import Optional
+
 import matplotlib.pyplot as plt
 
 # ========== 配置 ==========
 MODEL_BASES = [
     #"/jpfs-5p/chenyanxu.9/model/Qwen3-8B-glm5-dapo-20260411_030521",
-    "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-muon-projected-20260409_071528",
+    "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-20260415_022836",
     "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-muon-20260407_142933",
-    "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-muon-projected-1-20260410_060215",
+   # "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-muon-projected-1-20260410_060215",
     "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-20260403_091551",
+    "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-20260418_101040",
+    "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-20260418_052911",
+    "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-20260419_143043",
+    "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-anneal-20260419_162937",
     # "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-sgd-20260408_152324"
 ]
+
+# 可选图例名（不要用 set，无序）：
+#   - dict: {"/jpfs/.../model-dir": "显示名"}
+#   - list: 与 MODEL_BASES 顺序、条数一致，如 ["run-a", "run-b", ...]
+MODEL_LABELS: dict | list | tuple = [
+    "gasd",
+    "muon",
+    "adam",
+    "gasd-muon",
+    "gasd-5",
+    "gasd-5-1",
+    "gasd-anneal",
+]
+
+
+def _normalize_model_path(p: str) -> str:
+    return os.path.abspath(os.path.expanduser(p.rstrip("/")))
+
 
 # 从目录名提取图例标签（去掉固定前缀与末尾时间戳，避免多条曲线重名）
 def short_label(path):
@@ -39,6 +72,60 @@ def short_label(path):
     stem = re.sub(r"^Qwen3-8B-", "", name)
     stem = re.sub(r"-\d{8}_\d{6}$", "", stem)
     return stem if stem else name
+
+
+def resolve_display_label(
+    model_path: str,
+    index: int,
+    cli_labels: Optional[list[str]],
+) -> str:
+    """图例显示名：CLI > MODEL_LABELS > short_label。"""
+    if cli_labels is not None:
+        if index >= len(cli_labels):
+            raise SystemExit(
+                f"[ERROR] --labels 数量 ({len(cli_labels)}) 少于 MODEL_BASES ({len(MODEL_BASES)})，"
+                "请按顺序为每条路径提供一个名称（逗号分隔）。"
+            )
+        name = cli_labels[index].strip()
+        if name:
+            return name
+
+    m = MODEL_LABELS
+    if isinstance(m, set):
+        raise SystemExit(
+            "[ERROR] MODEL_LABELS 不能是 set（无序）。请改为与 MODEL_BASES 同序的 list，"
+            "例如 MODEL_LABELS = [\"a\", \"b\", ...]，或使用 dict：路径 -> 名称。"
+        )
+    if isinstance(m, dict):
+        norm = _normalize_model_path(model_path)
+        for key, v in m.items():
+            if _normalize_model_path(str(key)) == norm:
+                return str(v)
+    elif isinstance(m, (list, tuple)):
+        if not m:
+            pass
+        elif len(m) != len(MODEL_BASES):
+            raise SystemExit(
+                f"[ERROR] MODEL_LABELS 为 list/tuple 时须为空（表示不用）或与 MODEL_BASES 等长，"
+                f"当前 len(MODEL_LABELS)={len(m)}，len(MODEL_BASES)={len(MODEL_BASES)}。"
+            )
+        elif index < len(m):
+            s = str(m[index]).strip()
+            if s:
+                return s
+    return short_label(model_path)
+
+
+def _unique_label(base: str, used: set[str]) -> str:
+    if base not in used:
+        used.add(base)
+        return base
+    n = 2
+    while f"{base} ({n})" in used:
+        n += 1
+    out = f"{base} ({n})"
+    used.add(out)
+    return out
 
 
 def load_results(model_base):
@@ -122,7 +209,21 @@ def main():
         action="store_true",
         help="不写出 CSV，只画图",
     )
+    parser.add_argument(
+        "--labels",
+        default=None,
+        metavar="NAMES",
+        help="自定义图例名，逗号分隔，顺序与 MODEL_BASES 一致；名称内勿用英文逗号（可用 MODEL_LABELS）",
+    )
     args = parser.parse_args()
+
+    cli_labels: Optional[list[str]] = None
+    if args.labels is not None:
+        cli_labels = [s.strip() for s in args.labels.split(",")]
+        if len(cli_labels) != len(MODEL_BASES):
+            raise SystemExit(
+                f"[ERROR] --labels 解析得到 {len(cli_labels)} 段，MODEL_BASES 有 {len(MODEL_BASES)} 条，必须相等。"
+            )
 
     out_png = Path(args.output)
     if args.csv_dir:
@@ -133,8 +234,12 @@ def main():
     # {label: {iter_num: {bmk: metrics}}}
     all_data = {}
     all_bmks = set()
-    for mb in MODEL_BASES:
-        label = short_label(mb)
+    used_labels: set[str] = set()
+    for idx, mb in enumerate(MODEL_BASES):
+        raw = resolve_display_label(mb, idx, cli_labels)
+        label = _unique_label(raw, used_labels)
+        if raw != label:
+            print(f"[WARN] 图例名重复，已改为: {label} (路径: {mb})")
         data = load_results(mb)
         if data:
             all_data[label] = data

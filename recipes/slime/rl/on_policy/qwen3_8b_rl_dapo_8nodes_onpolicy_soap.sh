@@ -40,7 +40,7 @@ CKPT_ARGS=(
    --hf-checkpoint ${HF_CKPT}
    --load ${MEGATRON_CKPT}
    --save ${SAVE_DIR}
-   --save-interval 32
+   --save-interval 3
 )
 
 # ---- rollout & data ----
@@ -80,15 +80,15 @@ GRPO_ARGS=(
 # SOAP: linear params use SOAP (Shampoo + Adam preconditioner), nonlinear use Adam
 OPTIMIZER_ARGS=(
    --optimizer soap
-   --lr 5e-7
+   --lr 1e-6
    --lr-decay-style constant
    --weight-decay 0.1
    # SOAP-specific hyperparameters
-   --soap-beta1 0.9
+   --soap-beta1 0.95
    --soap-beta2 0.95
    --soap-shampoo-beta 0.95
    --soap-eps 1e-8
-   --soap-precondition-frequency 1
+   --soap-precondition-frequency 10
    --soap-adam-warmup-steps 0
    --soap-correct-bias
    --soap-fp32-matmul-prec high
@@ -108,7 +108,7 @@ SGLANG_ARGS=(
 
 # ---- performance / parallelism ----
 PERF_ARGS=(
-   --tensor-model-parallel-size 2
+   --tensor-model-parallel-size 4
    --sequence-parallel
    --pipeline-model-parallel-size 1
    --context-parallel-size 1

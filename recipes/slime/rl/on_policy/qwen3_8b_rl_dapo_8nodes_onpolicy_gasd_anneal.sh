@@ -5,6 +5,7 @@
 # Dataset: Polaris-Dataset-53K (math)
 # Backend: Megatron (8 nodes, 64 GPUs)
 # Optimizer: GASD = Muon(G) -> (WW^T + eps*I)^{-1} via CG -> RMS norm
+# Epsilon schedule: alpha anneals from 1.0 -> 20.0 over ~800 steps (exponential)
 
 set -ex
 
@@ -25,7 +26,7 @@ SCRIPT_DIR="${PROJECT_DIR}/scripts"
 HF_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375-hf"
 MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375_torch_dist"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-${TIMESTAMP}}"
+SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-anneal-${TIMESTAMP}}"
 DATA_PATH="/jpfs-5p/qingyu/data/profiling_20260402181029/filtered.jsonl"
 LOG_DIR=${SAVE_DIR}/output.log
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -77,6 +78,8 @@ GRPO_ARGS=(
 
 # ---- optimizer (GASD = Muon orthogonalization + GASD preconditioning) ----
 # Pipeline: G -> EMA momentum -> Nesterov -> Muon(NS) -> (WW^T+eps*I)^{-1} via CG -> RMS norm
+# Epsilon annealing: alpha(t) = 1.0 * exp(0.00375 * t), clamped to [1.0, 20.0]
+#   => reaches 20.0 at step ~800 (ln(20)/0.00375 ≈ 800)
 OPTIMIZER_ARGS=(
    --optimizer gasd
    --lr 1e-6
@@ -84,9 +87,10 @@ OPTIMIZER_ARGS=(
    --weight-decay 0.1
    # Momentum / Nesterov
    --gasd-momentum 0.95
-   # GASD CG preconditioning
-   --gasd-epsilon-alpha 5.0
-   --gasd-epsilon-mode constant
+   # GASD CG preconditioning with epsilon annealing
+   --gasd-epsilon-alpha 1.0
+   --gasd-epsilon-alpha-max 20.0
+   --gasd-epsilon-alpha-rate 0.00375
    --gasd-cg-iters 10
    --gasd-rms-scale 1.0
    # Muon orthogonalization (Newton-Schulz)
@@ -153,7 +157,7 @@ wandb login --relogin --host=http://11.71.1.218:8082 ${WANDB_API_KEY}
 WANDB_ARGS=(
    --use-wandb
    --wandb-project slime-rl-optim
-   --wandb-group qwen3-8b-onpolicy-profiling-gasd
+   --wandb-group qwen3-8b-onpolicy-profiling-gasd-anneal
 )
 
 

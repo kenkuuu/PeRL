@@ -22,7 +22,7 @@ PROJECT_DIR=${PROJECT_DIR:-"/jpfs/chenyanxu.9/PeRL/modules/slime"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/root/Megatron-LM"}
 SCRIPT_DIR="${PROJECT_DIR}/scripts"
 HF_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375-hf"
-MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-20260414_050747" 
+MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-20260403_091551" 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S) # TODO: fill in your megatron ckpt path
 SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-${TIMESTAMP}}"
 DATA_PATH="/jpfs-5p/qingyu/data/profiling_20260402181029/filtered.jsonl"
@@ -82,7 +82,7 @@ GRPO_ARGS=(
 # ---- optimizer (Adam) ----
 OPTIMIZER_ARGS=(
    --optimizer adam
-   --lr 5e-6
+   --lr 1e-6
    --lr-decay-style constant
    --weight-decay 0.1
    --adam-beta1 0.9
@@ -102,7 +102,7 @@ SGLANG_ARGS=(
 PERF_ARGS=(
    --tensor-model-parallel-size 1
    --sequence-parallel
-   --pipeline-model-parallel-size 2
+   --pipeline-model-parallel-size 4
    --context-parallel-size 1
    --expert-model-parallel-size 1
    --expert-tensor-parallel-size 1
