@@ -1,9 +1,14 @@
 #!/bin/bash
 
-# Qwen3-8B RL training with DAPO — FULLY ASYNC (off-policy)
+# Qwen3-8B RL training with DAPO + GLM-5 — FULLY ASYNC (off-policy)
 # Model: Qwen3-8B-Base-sft-dolci-think
 # Dataset: Polaris-Dataset-53K (math)
 # Backend: Megatron (8 nodes, 64 GPUs)
+#
+# GLM-5 features:
+#   - Optimizer reset after each weight update to inference engine
+#   - GLM-5 IcePop: drop π_θ_old, use r_t(θ) = π_θ / π_rollout directly
+#   - Asymmetric clipping + out-of-range token masking
 
 set -ex
 
@@ -22,10 +27,10 @@ PROJECT_DIR=${PROJECT_DIR:-"/jpfs/chenyanxu.9/PeRL/modules/slime"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/jpfs/chenyanxu.9/PeRL/modules/Megatron-LM"}
 SCRIPT_DIR="${PROJECT_DIR}/scripts"
 HF_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375-hf"
-MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375_torch_dist" 
-TIMESTAMP=$(date +%Y%m%d_%H%M%S) # TODO: fill in your megatron ckpt path
-SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-offpolicy-profiling-${TIMESTAMP}}"
-DATA_PATH="/jpfs-5p/qingyu/data/profiling_20260402181029/filtered.jsonl"
+MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375_torch_dist"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-glm5-dapo-${TIMESTAMP}}"
+DATA_PATH="/jpfs-5p/qingyu/data/profiling_20260402181029/filtered_acc_0.3_0.6.jsonl"
 LOG_DIR=${SAVE_DIR}/output.log
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 mkdir -p ${SAVE_DIR}
@@ -55,7 +60,7 @@ ROLLOUT_ARGS=(
    --balance-data
    --num-rollout 2000
    --rollout-batch-size 64
-   --over-sampling-batch-size 96
+   --over-sampling-batch-size 90
    --n-samples-per-prompt 8
    --rollout-max-response-len 30000
    --rollout-temperature 1.0
@@ -73,34 +78,42 @@ RM_ARGS=(
    --rm-type deepscaler
 )
 
-# ---- DAPO / GRPO algorithm ----
+# ---- DAPO / GRPO algorithm + GLM-5 off-policy correction ----
 GRPO_ARGS=(
    --advantage-estimator grpo
    --kl-coef 0.00
    --entropy-coef 0.00
-   # DAPO asymmetric clipping
+   # DAPO asymmetric clipping (PPO level)
    --eps-clip 0.2
    --eps-clip-high 0.28
    # DAPO dynamic sampling: filter out prompts where all samples have same reward
    --dynamic-sampling-filter-path slime.rollout.filter_hub.dynamic_sampling_filters.check_reward_nonzero_std
-   # off-policy importance sampling correction
+   # GLM-5: use rollout log probs directly as behavior policy (drop π_θ_old)
+   --use-rollout-logprobs
+   # GLM-5 IcePop: asymmetric masking on π_θ / π_rollout ratio
    --use-tis
+   --custom-tis-function-path examples.glm5_icepop.glm5_icepop.glm5_icepop_function
+   --tis-clip 2.0
+   --tis-clip-low 0.5
 )
 
-# ---- optimizer (Adam) ----
+# ---- optimizer (Adam) + GLM-5 optimizer reset ----
 OPTIMIZER_ARGS=(
    --optimizer adam
-   --lr 1e-6
+   --lr 5e-7
    --lr-decay-style constant
    --weight-decay 0.1
    --adam-beta1 0.9
    --adam-beta2 0.98
+   --adam-eps 1e-15
+   # GLM-5: reset optimizer states after each weight update to inference engine
+   --reset-optimizer-states
 )
 
 # ---- sglang rollout engine ----
 SGLANG_ARGS=(
    --rollout-num-gpus-per-engine 1
-   --rollout-num-gpus 64
+   --rollout-num-gpus 48
    --sglang-mem-fraction-static 0.85
    --sglang-server-concurrency 256
 )
@@ -115,10 +128,10 @@ PERF_ARGS=(
    --expert-tensor-parallel-size 1
    --recompute-granularity full
    --recompute-method uniform
-   --recompute-num-layers 1
+   --recompute-num-layers 2
    --use-distributed-optimizer
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 30000
+   --max-tokens-per-gpu 31000
 )
 
 # ---- misc ----
@@ -151,7 +164,7 @@ wandb login --relogin --host=http://11.71.1.218:8082 ${WANDB_API_KEY}
 WANDB_ARGS=(
    --use-wandb
    --wandb-project slime-rl-optim
-   --wandb-group interval-2-128
+   --wandb-group glm5-dapo-lr_5e-7
 )
 
 
@@ -165,7 +178,8 @@ RUNTIME_ENV_JSON="{
     \"CUDA_DEVICE_MAX_CONNECTIONS\": \"1\",
     \"NCCL_NVLS_ENABLE\": \"${HAS_NVLINK}\",
     \"WANDB_API_KEY\": \"${WANDB_API_KEY}\",
-    \"WANDB_BASE_URL\": \"http://11.71.1.218:8082\"
+    \"WANDB_BASE_URL\": \"http://11.71.1.218:8082\",
+    \"PYTORCH_CUDA_ALLOC_CONF\": \"expandable_segments:True\"
   }
 }"
 

@@ -19,13 +19,13 @@ echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
 # ---- paths (edit these) ----
 PROJECT_DIR=${PROJECT_DIR:-"/jpfs/chenyanxu.9/PeRL/modules/slime"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/root/Megatron-LM"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/jpfs/chenyanxu.9/PeRL/modules/Megatron-LM"}
 SCRIPT_DIR="${PROJECT_DIR}/scripts"
 HF_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375-hf"
-MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375_torch_dist" 
+MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-muon-20260413_090005" 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S) # TODO: fill in your megatron ckpt path
-SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-dapo-rl-${TIMESTAMP}}"
-DATA_PATH="/jpfs/chenyanxu.9/data/Polaris-V2-RL-14K/train-00000-of-00001.parquet"
+SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-muon-${TIMESTAMP}}"
+DATA_PATH="/jpfs-5p/qingyu/data/profiling_20260402181029/filtered.jsonl"
 LOG_DIR=${SAVE_DIR}/output.log
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 mkdir -p ${SAVE_DIR}
@@ -53,11 +53,11 @@ ROLLOUT_ARGS=(
    --rollout-shuffle
    --balance-data
    --num-rollout 2000
-   --rollout-batch-size 32
+   --rollout-batch-size 64
    --n-samples-per-prompt 8
    --rollout-max-response-len 30000
    --rollout-temperature 1.0
-   --global-batch-size 256
+   --global-batch-size 512
 )
 
 # ---- reward ----
@@ -81,10 +81,14 @@ GRPO_ARGS=(
 
 # ---- optimizer (Adam) ----
 OPTIMIZER_ARGS=(
-   --optimizer adam
+   --optimizer muon
    --lr 1e-6
    --lr-decay-style constant
    --weight-decay 0.1
+   --muon-momentum 0.95
+   --muon-num-ns-steps 5
+   --muon-scale-mode spectral
+   --muon-extra-scale-factor 0.2
    --adam-beta1 0.9
    --adam-beta2 0.98
    --adam-eps 1e-15
@@ -93,30 +97,28 @@ OPTIMIZER_ARGS=(
 # ---- sglang rollout engine ----
 SGLANG_ARGS=(
    --rollout-num-gpus-per-engine 1
-   --rollout-num-gpus 24
+   --rollout-num-gpus 64
    --sglang-mem-fraction-static 0.8
-
 )
 
 # ---- performance / parallelism ----
 PERF_ARGS=(
-   --tensor-model-parallel-size 1
+   --tensor-model-parallel-size 2
    --sequence-parallel
-   --pipeline-model-parallel-size 2
+   --pipeline-model-parallel-size 1
    --context-parallel-size 1
    --expert-model-parallel-size 1
    --expert-tensor-parallel-size 1
    --recompute-granularity full
    --recompute-method uniform
    --recompute-num-layers 1
-   --use-distributed-optimizer
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 30000
+   --max-tokens-per-gpu 32000
 )
 
 # ---- misc ----
 MISC_ARGS=(
-   --actor-num-nodes 4
+   --actor-num-nodes 8
    --actor-num-gpus-per-node 8
    --attention-dropout 0.0
    --hidden-dropout 0.0
@@ -129,7 +131,7 @@ EVAL_ARGS=(
    --eval-interval 32
    --eval-prompt-data aime /jpfs-5p/qingyu/data/aime-2024.jsonl
    --n-samples-per-eval-prompt 16
-   --eval-max-response-len 30000
+   --eval-max-response-len 31000
    --eval-top-p 0.95
 )
 
@@ -143,8 +145,8 @@ wandb login --relogin --host=http://11.71.1.218:8082 ${WANDB_API_KEY}
 
 WANDB_ARGS=(
    --use-wandb
-   --wandb-project slime-sft
-   --wandb-group qwen3-8b-dolci-think-rl-dapo
+   --wandb-project slime-rl-optim
+   --wandb-group qwen3-8b-onpolicy-profiling-muon-lr1e-5
 )
 
 

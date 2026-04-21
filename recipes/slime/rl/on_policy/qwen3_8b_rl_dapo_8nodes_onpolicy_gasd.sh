@@ -1,9 +1,10 @@
 #!/bin/bash
 
-# Qwen3-8B RL training with DAPO (GRPO + asymmetric clipping + dynamic sampling)
+# Qwen3-8B RL training with DAPO + GASD optimizer (Muon + GASD)
 # Model: Qwen3-8B-Base-sft-dolci-think
 # Dataset: Polaris-Dataset-53K (math)
-# Backend: Megatron (4 nodes, 32 GPUs)
+# Backend: Megatron (8 nodes, 64 GPUs)
+# Optimizer: GASD = Muon(G) -> (WW^T + eps*I)^{-1} via CG -> RMS norm
 
 set -ex
 
@@ -19,12 +20,12 @@ echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
 # ---- paths (edit these) ----
 PROJECT_DIR=${PROJECT_DIR:-"/jpfs/chenyanxu.9/PeRL/modules/slime"}
-MEGATRON_PATH=${MEGATRON_PATH:-"/root/Megatron-LM"}
+MEGATRON_PATH=${MEGATRON_PATH:-"/jpfs/chenyanxu.9/PeRL/modules/Megatron-LM"}
 SCRIPT_DIR="${PROJECT_DIR}/scripts"
 HF_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375-hf"
-MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375_torch_dist" 
-TIMESTAMP=$(date +%Y%m%d_%H%M%S) # TODO: fill in your megatron ckpt path
-SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-${TIMESTAMP}}"
+MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375_torch_dist"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-${TIMESTAMP}}"
 DATA_PATH="/jpfs-5p/qingyu/data/profiling_20260402181029/filtered.jsonl"
 LOG_DIR=${SAVE_DIR}/output.log
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -38,13 +39,10 @@ CKPT_ARGS=(
    --hf-checkpoint ${HF_CKPT}
    --load ${MEGATRON_CKPT}
    --save ${SAVE_DIR}
-   --save-interval 32
+   --save-interval 16
 )
 
 # ---- rollout & data ----
-# Dataset format: parquet with fields {problem, solution, difficulty, prompt}
-# prompt is already in chat format: [{role: user, content: ...}]
-# solution is the ground truth answer (number or latex expression)
 ROLLOUT_ARGS=(
    --prompt-data ${DATA_PATH}
    --input-key prompt
@@ -61,8 +59,6 @@ ROLLOUT_ARGS=(
 )
 
 # ---- reward ----
-# deepscaler: extracts answer after </think>, then \boxed{} from model output,
-# compares with label via mathd normalization + sympy simplification
 RM_ARGS=(
    --rm-type deepscaler
 )
@@ -79,14 +75,30 @@ GRPO_ARGS=(
    --dynamic-sampling-filter-path slime.rollout.filter_hub.dynamic_sampling_filters.check_reward_nonzero_std
 )
 
-# ---- optimizer (Adam) ----
+# ---- optimizer (GASD = Muon orthogonalization + GASD preconditioning) ----
+# Pipeline: G -> EMA momentum -> Nesterov -> Muon(NS) -> (WW^T+eps*I)^{-1} via CG -> RMS norm
 OPTIMIZER_ARGS=(
-   --optimizer adam
+   --optimizer gasd
    --lr 1e-6
    --lr-decay-style constant
    --weight-decay 0.1
+   # Momentum / Nesterov
+   --gasd-momentum 0.95
+   # GASD CG preconditioning
+   --gasd-epsilon-alpha 5.0
+   --gasd-epsilon-mode constant
+   --gasd-cg-iters 10
+   --gasd-rms-scale 1.0
+   # Muon orthogonalization (Newton-Schulz)
+   --gasd-num-ns-steps 5
+   --gasd-scale-mode spectral
+   --gasd-extra-scale-factor 0.2
+   --gasd-fp32-matmul-prec medium
+   --gasd-tp-mode blockwise
+   # Adam for non-linear params (embedding, output, 1D)
    --adam-beta1 0.9
    --adam-beta2 0.98
+   --adam-eps 1e-15
 )
 
 # ---- sglang rollout engine ----
@@ -94,23 +106,21 @@ SGLANG_ARGS=(
    --rollout-num-gpus-per-engine 1
    --rollout-num-gpus 64
    --sglang-mem-fraction-static 0.8
-
 )
 
 # ---- performance / parallelism ----
 PERF_ARGS=(
-   --tensor-model-parallel-size 1
+   --tensor-model-parallel-size 2
    --sequence-parallel
-   --pipeline-model-parallel-size 2
+   --pipeline-model-parallel-size 1
    --context-parallel-size 1
    --expert-model-parallel-size 1
    --expert-tensor-parallel-size 1
    --recompute-granularity full
    --recompute-method uniform
    --recompute-num-layers 1
-   --use-distributed-optimizer
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 30000
+   --max-tokens-per-gpu 32000
 )
 
 # ---- misc ----
@@ -143,7 +153,7 @@ wandb login --relogin --host=http://11.71.1.218:8082 ${WANDB_API_KEY}
 WANDB_ARGS=(
    --use-wandb
    --wandb-project slime-rl-optim
-   --wandb-group qwen3-8b-onpolicy-profiling-8nodes
+   --wandb-group qwen3-8b-onpolicy-profiling-gasd
 )
 
 
