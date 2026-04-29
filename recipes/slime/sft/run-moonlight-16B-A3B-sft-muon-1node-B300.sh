@@ -23,6 +23,8 @@ set -exo pipefail
 : "${HF_CHECKPOINT:?Set HF_CHECKPOINT}"
 : "${MCORE_CHECKPOINT:?Set MCORE_CHECKPOINT}"
 : "${SAVE_DIR:?Set SAVE_DIR}"
+: "${WANDB_PROJECT:?Set WANDB_PROJECT}"
+: "${WANDB_GROUP:?Set WANDB_GROUP}"
 
 cd $PROJECT_DIR
 LOG_DIR=${SAVE_DIR}/output.log
@@ -106,8 +108,8 @@ OPTIMIZER_ARGS=(
 
 WANDB_ARGS=(
   --use-wandb
-  --wandb-project slime-sft
-  --wandb-group Moonlight-16B-A3B-sft-muon
+  --wandb-project $WANDB_PROJECT
+  --wandb-group $WANDB_GROUP
 )
 
 MISC_ARGS=(
