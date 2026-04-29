@@ -13,12 +13,13 @@
 set -ex
 
 # check env variable
+: "${PROMPT_DATA:?Set PROMPT_DATA}"
 : "${WANDB_API_KEY:?Set WANDB_API_KEY}"
 : "${WANDB_ENTITY:?Set WANDB_ENTITY}"
 : "${PROJECT_DIR:?Set PROJECT_DIR}"
 : "${PYTHONPATH:?Set PYTHONPATH}"
 : "${WANDB_BASE_URL:?Set WANDB_BASE_URL}"
-: "${WANDB_API_KEY:?Set WANDB_API_KEY}"
+: "${SCRIPT_DIR:?Set SCRIPT_DIR}"
 
 cd $PROJECT_DIR
 # will prevent ray from buffering stdout/stderr
@@ -32,7 +33,6 @@ else
 fi
 echo "HAS_NVLINK: $HAS_NVLINK (detected $NVLINK_COUNT NVLink references)"
 
-: "${SCRIPT_DIR:?Set SCRIPT_DIR}"
 source "${SCRIPT_DIR}/scripts/models/moonlight.sh"
 
 CKPT_ARGS=(
@@ -42,9 +42,18 @@ CKPT_ARGS=(
   --save-interval 128
 )
 
+YARN_ARGS=(
+  --original-max-position-embeddings 8192
+  --rotary-scaling-factor 4.0
+  --beta-fast 32.0
+  --beta-slow 1.0
+  --mscale 1.0
+  --mscale-all-dim 1.0
+)
+
 SFT_ARGS=(
   --rollout-function-path slime.rollout.sft_rollout.generate_rollout
-  --prompt-data
+  --prompt-data $PROMPT_DATA
   --input-key messages
   # data is already in conversation format, no need to apply chat template
   #--apply-chat-template
@@ -52,7 +61,8 @@ SFT_ARGS=(
   --num-epoch 5
   --rollout-batch-size 256
   --global-batch-size 256
-  --rollout-max-context-len 8000
+  --rollout-max-context-len 32000
+  --seq-length 32000
 
   --loss-type sft_loss
   --calculate-per-token-loss
@@ -62,7 +72,6 @@ SFT_ARGS=(
 
 PERF_ARGS=(
   --tensor-model-parallel-size 1
-  --sequence-parallel
   --pipeline-model-parallel-size 1
   --context-parallel-size 1
   --expert-model-parallel-size 8
@@ -73,7 +82,7 @@ PERF_ARGS=(
   --recompute-num-layers 1
 
   --use-dynamic-batch-size
-  --max-tokens-per-gpu 32000
+  --max-tokens-per-gpu 64000
 )
 
 OPTIMIZER_ARGS=(
@@ -102,10 +111,10 @@ MISC_ARGS=(
   # should be good for model performance
   --accumulate-allreduce-grads-in-fp32
   --attention-softmax-in-fp32
-  # MLA model, do not use flash attention backend
-  # --attention-backend flash
+  --attention-backend flash
 
-  --moe-token-dispatcher-type alltoall
+  --moe-enable-deepep
+  --moe-token-dispatcher-type flex
 )
 
 unset http_proxy
@@ -133,7 +142,7 @@ RUNTIME_ENV_JSON="{
 
 ray job submit --address="http://127.0.0.1:8265" \
   --runtime-env-json="${RUNTIME_ENV_JSON}" \
-  -- python3 /jpfs/chenyanxu.9/slime_optim/train_async.py \
+  -- python3 ${PROJECT_DIR}/modules/slime/train_async.py \
   --actor-num-nodes 8 \
   --actor-num-gpus-per-node 8 \
   ${MODEL_ARGS[@]} \
@@ -142,4 +151,5 @@ ray job submit --address="http://127.0.0.1:8265" \
   ${OPTIMIZER_ARGS[@]} \
   ${WANDB_ARGS[@]} \
   ${PERF_ARGS[@]} \
-  ${MISC_ARGS[@]}
+  ${MISC_ARGS[@]} \
+  ${YARN_ARGS[@]}
