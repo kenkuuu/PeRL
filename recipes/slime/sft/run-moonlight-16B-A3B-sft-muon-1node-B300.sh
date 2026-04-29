@@ -144,7 +144,9 @@ RUNTIME_ENV_JSON="{
     \"NCCL_NVLS_ENABLE\": \"${HAS_NVLINK}\",
     \"PYTORCH_CUDA_ALLOC_CONF\": \"expandable_segments:True\",
     \"WANDB_API_KEY\": \"${WANDB_API_KEY}\",
-    \"WANDB_BASE_URL\": \"${WANDB_BASE_URL}\"
+    \"WANDB_BASE_URL\": \"${WANDB_BASE_URL}\",
+    \"WANDB_MODE\": \"online\",
+    \"WANDB_DIR\": \"/tmp/wandb\"
   }
 }"
 
