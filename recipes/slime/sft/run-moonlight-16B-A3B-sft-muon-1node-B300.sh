@@ -10,7 +10,7 @@
 # pkill -9 ray
 # pkill -9 python
 
-set -ex
+set -exo pipefail
 
 # check env variable
 : "${PROMPT_DATA:?Set PROMPT_DATA}"
@@ -20,8 +20,14 @@ set -ex
 : "${PYTHONPATH:?Set PYTHONPATH}"
 : "${WANDB_BASE_URL:?Set WANDB_BASE_URL}"
 : "${SCRIPT_DIR:?Set SCRIPT_DIR}"
+: "${HF_CHECKPOINT:?Set HF_CHECKPOINT}"
+: "${MCORE_CHECKPOINT:?Set MCORE_CHECKPOINT}"
+: "${SAVE_DIR:?Set SAVE_DIR}"
 
 cd $PROJECT_DIR
+LOG_DIR=${SAVE_DIR}/output.log
+mkdir -p $(dirname $LOG_DIR)
+
 # will prevent ray from buffering stdout/stderr
 export PYTHONBUFFERED=16
 
@@ -152,4 +158,4 @@ ray job submit --address="http://127.0.0.1:8265" \
   ${WANDB_ARGS[@]} \
   ${PERF_ARGS[@]} \
   ${MISC_ARGS[@]} \
-  ${YARN_ARGS[@]}
+  ${YARN_ARGS[@]} 2>&1 | tee $LOG_DIR
