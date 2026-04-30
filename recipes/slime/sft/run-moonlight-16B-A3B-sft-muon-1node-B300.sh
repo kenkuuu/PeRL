@@ -90,7 +90,7 @@ PERF_ARGS=(
   --recompute-num-layers 1
 
   --use-dynamic-batch-size
-  --max-tokens-per-gpu 64000
+  --max-tokens-per-gpu 128000
 )
 
 OPTIMIZER_ARGS=(
