@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Qwen3-8B RL training with DAPO — FULLY ASYNC (off-policy) — Roo optimizer
+# Qwen3-8B RL training with DAPO + GASD optimizer (Muon + GASD)
 # Model: Qwen3-8B-Base-sft-dolci-think
 # Dataset: Polaris-Dataset-53K (math)
 # Backend: Megatron (8 nodes, 64 GPUs)
-# Optimizer: Roo (Matrix Natural Gradient)
+# Optimizer: GASD = Muon(G) -> (WW^T + eps*I)^{-1} via CG -> RMS norm
 
 set -ex
 
@@ -23,9 +23,9 @@ PROJECT_DIR=${PROJECT_DIR:-"/jpfs/chenyanxu.9/PeRL/modules/slime"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/jpfs/chenyanxu.9/PeRL/modules/Megatron-LM"}
 SCRIPT_DIR="${PROJECT_DIR}/scripts"
 HF_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375-hf"
-MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375_torch_dist"
+MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-20260415_022836"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-offpolicy-roo-${TIMESTAMP}}"
+SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-${TIMESTAMP}}"
 DATA_PATH="/jpfs-5p/qingyu/data/profiling_20260402181029/filtered.jsonl"
 LOG_DIR=${SAVE_DIR}/output.log
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -44,7 +44,6 @@ CKPT_ARGS=(
 
 # ---- rollout & data ----
 ROLLOUT_ARGS=(
-   --rollout-function-path fully_async_rollout.generate_rollout_fully_async
    --prompt-data ${DATA_PATH}
    --input-key prompt
    --label-key answer
@@ -53,13 +52,10 @@ ROLLOUT_ARGS=(
    --balance-data
    --num-rollout 2000
    --rollout-batch-size 64
-   --over-sampling-batch-size 96
    --n-samples-per-prompt 8
    --rollout-max-response-len 30000
    --rollout-temperature 1.0
-   --global-batch-size 64
-   --partial-rollout
-   --mask-offpolicy-in-partial-rollout
+   --global-batch-size 512
 )
 
 # ---- reward ----
@@ -72,44 +68,41 @@ GRPO_ARGS=(
    --advantage-estimator grpo
    --kl-coef 0.00
    --entropy-coef 0.00
+   # DAPO asymmetric clipping
    --eps-clip 0.2
    --eps-clip-high 0.28
+   # DAPO dynamic sampling: filter out prompts where all samples have same reward
    --dynamic-sampling-filter-path slime.rollout.filter_hub.dynamic_sampling_filters.check_reward_nonzero_std
-   --use-tis
 )
 
-# ---- optimizer (Roo — Matrix Natural Gradient) ----
-# Roo uses spectral transform f(σ)=σ/(σ²+ε²) on momentum via Gram matrix inversion.
-# Linear (2D) params use Roo; nonlinear params (embeddings, biases, norms) use Adam internally.
+# ---- optimizer (GASD = Muon orthogonalization + GASD preconditioning) ----
+# Pipeline: G -> EMA momentum -> Nesterov -> Muon(NS) -> (WW^T+eps*I)^{-1} via CG -> RMS norm
 OPTIMIZER_ARGS=(
-   --optimizer roo
-   --lr 3e-4
+   --optimizer muon
+   --lr 1e-6
    --lr-decay-style constant
-   --weight-decay 0.01
-   --roo-momentum 0.95
-   --roo-epsilon 0.01
-   --roo-num-ns-steps 5
-   --roo-scale-factor 1.0
-   --roo-tp-mode allreduce_gram
-   --roo-fp32-matmul-prec medium
-   # Adam defaults for nonlinear params (embeddings, biases, norms)
+   --weight-decay 0.1
+   --muon-momentum 0.95
+   --muon-num-ns-steps 5
+   --muon-scale-mode spectral
+   --muon-extra-scale-factor 0.2
    --adam-beta1 0.9
    --adam-beta2 0.98
+   --adam-eps 1e-15
 )
 
 # ---- sglang rollout engine ----
 SGLANG_ARGS=(
    --rollout-num-gpus-per-engine 1
-   --rollout-num-gpus 96
-   --sglang-mem-fraction-static 0.85
+   --rollout-num-gpus 64
+   --sglang-mem-fraction-static 0.8
 )
 
 # ---- performance / parallelism ----
-# NOTE: Roo does NOT support --use-distributed-optimizer (removed)
 PERF_ARGS=(
-   --tensor-model-parallel-size 1
+   --tensor-model-parallel-size 2
    --sequence-parallel
-   --pipeline-model-parallel-size 2
+   --pipeline-model-parallel-size 1
    --context-parallel-size 1
    --expert-model-parallel-size 1
    --expert-tensor-parallel-size 1
@@ -117,18 +110,26 @@ PERF_ARGS=(
    --recompute-method uniform
    --recompute-num-layers 1
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 30000
+   --max-tokens-per-gpu 32000
 )
 
 # ---- misc ----
 MISC_ARGS=(
-   --actor-num-nodes 4
+   --actor-num-nodes 8
    --actor-num-gpus-per-node 8
    --attention-dropout 0.0
    --hidden-dropout 0.0
    --accumulate-allreduce-grads-in-fp32
    --attention-softmax-in-fp32
    --attention-backend flash
+   --colocate
+)
+EVAL_ARGS=(
+   --eval-interval 32
+   --eval-prompt-data aime /jpfs-5p/qingyu/data/aime-2024.jsonl
+   --n-samples-per-eval-prompt 16
+   --eval-max-response-len 31000
+   --eval-top-p 0.95
 )
 
 unset http_proxy
@@ -142,7 +143,7 @@ wandb login --relogin --host=http://11.71.1.218:8082 ${WANDB_API_KEY}
 WANDB_ARGS=(
    --use-wandb
    --wandb-project slime-rl-optim
-   --wandb-group qwen3-8b-offpolicy-roo-8nodes
+   --wandb-group qwen3-8b-onpolicy-profiling-gasd
 )
 
 
@@ -152,7 +153,7 @@ export no_proxy="127.0.0.1,${MASTER_ADDR}"
 
 RUNTIME_ENV_JSON="{
   \"env_vars\": {
-    \"PYTHONPATH\": \"${MEGATRON_PATH}/:${PROJECT_DIR}/examples/fully_async\",
+    \"PYTHONPATH\": \"${MEGATRON_PATH}/\",
     \"CUDA_DEVICE_MAX_CONNECTIONS\": \"1\",
     \"NCCL_NVLS_ENABLE\": \"${HAS_NVLINK}\",
     \"WANDB_API_KEY\": \"${WANDB_API_KEY}\",
@@ -162,7 +163,7 @@ RUNTIME_ENV_JSON="{
 
 ray job submit --address="http://127.0.0.1:8265" \
    --runtime-env-json="${RUNTIME_ENV_JSON}" \
-   -- python3 ${PROJECT_DIR}/train_async.py \
+   -- python3 ${PROJECT_DIR}/train.py \
    ${EVAL_ARGS[@]} \
    ${MODEL_ARGS[@]} \
    ${CKPT_ARGS[@]} \

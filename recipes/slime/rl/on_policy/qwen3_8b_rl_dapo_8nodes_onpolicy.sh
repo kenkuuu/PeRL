@@ -22,10 +22,10 @@ PROJECT_DIR=${PROJECT_DIR:-"/jpfs/chenyanxu.9/PeRL/modules/slime"}
 MEGATRON_PATH=${MEGATRON_PATH:-"/root/Megatron-LM"}
 SCRIPT_DIR="${PROJECT_DIR}/scripts"
 HF_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375-hf"
-MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-Base-sft-dolci-think/iter_0005375_torch_dist" 
+MEGATRON_CKPT="/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-20260403_091551" 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S) # TODO: fill in your megatron ckpt path
-SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-dapo-rl-${TIMESTAMP}}"
-DATA_PATH="/jpfs/chenyanxu.9/data/Polaris-V2-RL-14K/train-00000-of-00001.parquet"
+SAVE_DIR="${SAVE_DIR:-/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-${TIMESTAMP}}"
+DATA_PATH="/jpfs-5p/qingyu/data/profiling_20260402181029/filtered.jsonl"
 LOG_DIR=${SAVE_DIR}/output.log
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 mkdir -p ${SAVE_DIR}
@@ -53,11 +53,11 @@ ROLLOUT_ARGS=(
    --rollout-shuffle
    --balance-data
    --num-rollout 2000
-   --rollout-batch-size 32
+   --rollout-batch-size 64
    --n-samples-per-prompt 8
    --rollout-max-response-len 30000
    --rollout-temperature 1.0
-   --global-batch-size 256
+   --global-batch-size 512
 )
 
 # ---- reward ----
@@ -93,7 +93,7 @@ OPTIMIZER_ARGS=(
 # ---- sglang rollout engine ----
 SGLANG_ARGS=(
    --rollout-num-gpus-per-engine 1
-   --rollout-num-gpus 24
+   --rollout-num-gpus 64
    --sglang-mem-fraction-static 0.8
 
 )
@@ -102,7 +102,7 @@ SGLANG_ARGS=(
 PERF_ARGS=(
    --tensor-model-parallel-size 1
    --sequence-parallel
-   --pipeline-model-parallel-size 2
+   --pipeline-model-parallel-size 4
    --context-parallel-size 1
    --expert-model-parallel-size 1
    --expert-tensor-parallel-size 1
@@ -111,12 +111,12 @@ PERF_ARGS=(
    --recompute-num-layers 1
    --use-distributed-optimizer
    --use-dynamic-batch-size
-   --max-tokens-per-gpu 30000
+   --max-tokens-per-gpu 32000
 )
 
 # ---- misc ----
 MISC_ARGS=(
-   --actor-num-nodes 4
+   --actor-num-nodes 8
    --actor-num-gpus-per-node 8
    --attention-dropout 0.0
    --hidden-dropout 0.0
@@ -129,7 +129,7 @@ EVAL_ARGS=(
    --eval-interval 32
    --eval-prompt-data aime /jpfs-5p/qingyu/data/aime-2024.jsonl
    --n-samples-per-eval-prompt 16
-   --eval-max-response-len 30000
+   --eval-max-response-len 31000
    --eval-top-p 0.95
 )
 
@@ -137,14 +137,14 @@ unset http_proxy
 unset https_proxy
 unset HTTP_PROXY
 unset HTTPS_PROXY
-export WANDB_API_KEY=local-b0d90ad40bfaa2dd58fa4525f18c82ccb8aca2c6 # your_wandb_key
-export WANDB_ENTITY=automl # your_wandb_entity
-wandb login --relogin --host=http://11.71.1.218:8082 ${WANDB_API_KEY}
+export WANDB_API_KEY=local-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 # your_wandb_key
+export WANDB_ENTITY=duo # your_wandb_entity
+wandb login --relogin --host=http://11.71.1.153:8080 ${WANDB_API_KEY}
 
 WANDB_ARGS=(
    --use-wandb
-   --wandb-project slime-sft
-   --wandb-group qwen3-8b-dolci-think-rl-dapo
+   --wandb-project slime-rl-optim
+   --wandb-group qwen3-8b-onpolicy-profiling-8nodes
 )
 
 
@@ -158,7 +158,7 @@ RUNTIME_ENV_JSON="{
     \"CUDA_DEVICE_MAX_CONNECTIONS\": \"1\",
     \"NCCL_NVLS_ENABLE\": \"${HAS_NVLINK}\",
     \"WANDB_API_KEY\": \"${WANDB_API_KEY}\",
-    \"WANDB_BASE_URL\": \"http://11.71.1.218:8082\"
+    \"WANDB_BASE_URL\": \"http://11.71.1.153:8080\"
   }
 }"
 

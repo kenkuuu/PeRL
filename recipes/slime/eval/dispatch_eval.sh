@@ -14,11 +14,24 @@ set -uo pipefail
 
 # ========== 配置 ==========
 MODEL_BASES=(
-    "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-20260403_091551"
+    # "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-20260415_022836"
+    # "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-20260416_144411"
+    # # "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-muon-projected-20260409_071528"
+    # "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-muon-20260407_142933"
+    # "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-muon-20260413_090005"
+    "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-20260418_101040"
+    "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-20260418_052911"
+    "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-20260419_143043"
+    "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-gasd-anneal-20260419_162937"
+    # "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-muon-projected-1-20260410_060215"
+    # "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-sgd-20260408_152324"
+    # "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-glm5-dapo-20260411_030521"
+    # "/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-muon-projected-0.5-lr_5e-6-20260412_164003"
+    #"/jpfs-5p/chenyanxu.9/model/Qwen3-8B-onpolicy-profiling-muon-projected-0.5-lr_5e-6-20260411_151109"
 )
 WORKER_SCRIPT="/jpfs/chenyanxu.9/PeRL/recipes/slime/eval/eval_worker.sh"
 NAMESPACE="${NAMESPACE:-explore-train}"
-NUM_PODS=4
+NUM_PODS=8
 
 if command -v kubectl >/dev/null 2>&1; then
     KUBECTL=(kubectl)
