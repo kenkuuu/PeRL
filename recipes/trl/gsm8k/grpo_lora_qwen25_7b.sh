@@ -45,6 +45,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 ACCELERATE_LOG_LEVEL=info \
     --config.training.vllm_mode "colocate" \
     --config.training.vllm_gpu_memory_utilization 0.5 \
     --config.training.use_liger_kernel true \
+    --config.training.top_entropy_quantile 0.0 \
     --config.training.loss_type "grpo" \
     --config.training.report_to '["wandb"]' \
     --config.logging.wandb_project "grpo-lora-gsm8k" \
