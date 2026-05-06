@@ -33,21 +33,12 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
 
-# 1. Install PyTorch cu128 first to pin the CUDA version before vLLM pulls its own
-RUN uv pip install torch torchvision torchaudio \
-    --index-url https://download.pytorch.org/whl/cu128
-
-# 2. Install vLLM cu128 wheel; --torch-backend=cu128 tells uv not to replace torch
+# 1. Install vLLM cu128; let vLLM's dependency resolver pick the compatible torch version
 RUN uv pip install vllm \
     --extra-index-url https://wheels.vllm.ai/cu128/ \
     --torch-backend=cu128
 
-# 3. Reinstall torch cu128 to ensure vLLM did not downgrade it
-RUN uv pip install torch torchvision torchaudio \
-    --index-url https://download.pytorch.org/whl/cu128 \
-    --reinstall
-
-# 4. Install remaining training dependencies first (trl[vllm] may pull torch variants)
+# 2. Install remaining training dependencies
 RUN uv pip install \
     accelerate \
     datasets \
@@ -60,12 +51,7 @@ RUN uv pip install \
     peft \
     wandb
 
-# 5. Reinstall torch cu128 to ensure final torch is cu128 before flash-attn build
-RUN uv pip install torch torchvision torchaudio \
-    --index-url https://download.pytorch.org/whl/cu128 \
-    --reinstall
-
-# 6. Install flash-attn last so it compiles against the final settled torch
+# 3. Install flash-attn last so it compiles against the final settled torch
 RUN MAX_JOBS=8 uv pip install flash-attn --no-build-isolation
 
 WORKDIR /workspace
