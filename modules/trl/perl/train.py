@@ -1,4 +1,5 @@
 
+import inspect
 import torch
 import os
 
@@ -99,10 +100,10 @@ def train(
         optimizer, model = apply_lora(model, args)
         logger.info(f"Lora configured successfully")
 
-    # 4.Training configuration
-    training_args = GRPOConfig(
-        **vars(args.training),
-    )
+    # 4.Training configuration - filter to only params accepted by this TRL version
+    grpo_params = set(inspect.signature(GRPOConfig).parameters.keys())
+    training_dict = {k: v for k, v in vars(args.training).items() if k in grpo_params}
+    training_args = GRPOConfig(**training_dict)
 
     # 5.Train
     logger.info(f"Training model with GRPO")
@@ -110,6 +111,7 @@ def train(
         model=model,
         processing_class=tokenizer,
         reward_funcs=reward_functions,
+        reward_weights=reward_weights,
         args=training_args,
         train_dataset=train_dataset,
         optimizers=(optimizer, None) if optimizer is not None else (None, None)
