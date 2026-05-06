@@ -106,6 +106,23 @@ def train(
     training_args = GRPOConfig(**training_dict)
 
     # 5.Train
+    # Build optimizer explicitly to avoid empty param_group mismatch with DeepSpeed + cosine scheduler.
+    # Transformers' default optimizer creates 2 groups (with/without weight decay); DeepSpeed drops empty
+    # groups, leaving fewer groups than the scheduler expects.
+    if optimizer is None:
+        from torch.optim import AdamW
+        no_decay = ["bias", "LayerNorm.weight"]
+        with_decay = [p for n, p in model.named_parameters()
+                      if p.requires_grad and not any(nd in n for nd in no_decay)]
+        without_decay = [p for n, p in model.named_parameters()
+                         if p.requires_grad and any(nd in n for nd in no_decay)]
+        param_groups = []
+        if with_decay:
+            param_groups.append({"params": with_decay, "weight_decay": 0.01})
+        if without_decay:
+            param_groups.append({"params": without_decay, "weight_decay": 0.0})
+        optimizer = AdamW(param_groups, lr=args.training.learning_rate)
+
     logger.info(f"Training model with GRPO")
     trainer_params = set(inspect.signature(GRPOTrainer.__init__).parameters.keys())
     trainer_kwargs = dict(
@@ -114,7 +131,7 @@ def train(
         reward_funcs=reward_functions,
         args=training_args,
         train_dataset=train_dataset,
-        optimizers=(optimizer, None) if optimizer is not None else (None, None),
+        optimizers=(optimizer, None),
     )
     if "reward_weights" in trainer_params:
         trainer_kwargs["reward_weights"] = reward_weights
