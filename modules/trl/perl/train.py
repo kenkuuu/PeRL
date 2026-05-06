@@ -107,15 +107,18 @@ def train(
 
     # 5.Train
     logger.info(f"Training model with GRPO")
-    trainer = GRPOTrainer(
+    trainer_params = set(inspect.signature(GRPOTrainer.__init__).parameters.keys())
+    trainer_kwargs = dict(
         model=model,
         processing_class=tokenizer,
         reward_funcs=reward_functions,
-        reward_weights=reward_weights,
         args=training_args,
         train_dataset=train_dataset,
-        optimizers=(optimizer, None) if optimizer is not None else (None, None)
+        optimizers=(optimizer, None) if optimizer is not None else (None, None),
     )
+    if "reward_weights" in trainer_params:
+        trainer_kwargs["reward_weights"] = reward_weights
+    trainer = GRPOTrainer(**trainer_kwargs)
     
     # 支持从 checkpoint 恢复训练
     resume_checkpoint = args.training.resume_from_checkpoint
