@@ -7,6 +7,20 @@ deepspeed_config:
   zero3_init_flag: false
   zero_stage: 2
   gradient_clipping: auto
+  optimizer:
+    type: AdamW
+    params:
+      lr: auto
+      betas: auto
+      eps: auto
+      weight_decay: auto
+  scheduler:
+    type: WarmupDecayLR
+    params:
+      total_num_steps: auto
+      warmup_min_lr: auto
+      warmup_max_lr: auto
+      warmup_num_steps: auto
 distributed_type: DEEPSPEED
 downcast_bf16: 'no'
 machine_rank: 0
