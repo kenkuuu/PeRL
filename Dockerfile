@@ -1,7 +1,8 @@
 FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    TZ=Asia/Tokyo
+    TZ=Asia/Tokyo \
+    UV_SYSTEM_PYTHON=1
 
 # System dependencies
 RUN apt-get update && apt-get install -y \
