@@ -7,7 +7,7 @@ LOG_FILE=${OUTPUT_DIR}/output.log
 
 mkdir -p ${OUTPUT_DIR}
 
-CUDA_VISIBLE_DEVICES=0,1,2,3 ACCELERATE_LOG_LEVEL=info \
+CUDA_VISIBLE_DEVICES=0,1,2,3 ACCELERATE_LOG_LEVEL=info FLASHINFER_DISABLE_VERSION_CHECK=1 \
     accelerate launch \
     --main_process_port 29500 \
     --config_file recipes/trl/accelerate/ds_zero2_4gpu.yaml \
