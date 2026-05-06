@@ -47,10 +47,7 @@ RUN uv pip install torch torchvision torchaudio \
     --index-url https://download.pytorch.org/whl/cu128 \
     --reinstall
 
-# 4. Install flash-attn from source (nvcc 12.8 now matches torch.version.cuda 12.8)
-RUN MAX_JOBS=8 uv pip install flash-attn --no-build-isolation
-
-# 5. Install remaining training dependencies
+# 4. Install remaining training dependencies first (trl[vllm] may pull torch variants)
 RUN uv pip install \
     accelerate \
     datasets \
@@ -62,6 +59,14 @@ RUN uv pip install \
     "trl[vllm]" \
     peft \
     wandb
+
+# 5. Reinstall torch cu128 to ensure final torch is cu128 before flash-attn build
+RUN uv pip install torch torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/cu128 \
+    --reinstall
+
+# 6. Install flash-attn last so it compiles against the final settled torch
+RUN MAX_JOBS=8 uv pip install flash-attn --no-build-isolation
 
 WORKDIR /workspace
 
