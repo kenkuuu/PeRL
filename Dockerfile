@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=Asia/Tokyo \
@@ -32,6 +32,36 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
+
+# 1. Install PyTorch cu128 first to pin the CUDA version before vLLM pulls its own
+RUN uv pip install torch torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/cu128
+
+# 2. Install vLLM cu128 wheel; --torch-backend=cu128 tells uv not to replace torch
+RUN uv pip install vllm \
+    --extra-index-url https://wheels.vllm.ai/cu128/ \
+    --torch-backend=cu128
+
+# 3. Reinstall torch cu128 to ensure vLLM did not downgrade it
+RUN uv pip install torch torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/cu128 \
+    --reinstall
+
+# 4. Install flash-attn from source (nvcc 12.8 now matches torch.version.cuda 12.8)
+RUN MAX_JOBS=8 uv pip install flash-attn --no-build-isolation
+
+# 5. Install remaining training dependencies
+RUN uv pip install \
+    accelerate \
+    datasets \
+    deepspeed \
+    fire \
+    huggingface-hub \
+    math-verify \
+    transformers \
+    "trl[vllm]" \
+    peft \
+    wandb
 
 WORKDIR /workspace
 
