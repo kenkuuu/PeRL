@@ -8,6 +8,7 @@ from transformers import AutoTokenizer, set_seed
 from tqdm import tqdm
 
 from perl.data import load_dataset as load_perl_dataset
+from perl.data.gsm8k import _numbers_equal
 from perl.utils.logging import init_logger, logger
 
 
@@ -37,17 +38,13 @@ def _to_prompt_string(prompt, tokenizer):
 
 
 def _score(completion, example):
-    """Extract <answer> and compare with ground truth numerically."""
+    """Extract <answer> and compare with ground truth using fuzzy numeric matching."""
     try:
         extracted = completion.split("<answer>")[-1].split("</answer>")[0].strip()
     except IndexError:
         extracted = ""
-
-    gt = str(example.get("answer", example.get("target", ""))).replace(",", "")
-    try:
-        return float(extracted.replace(",", "")) == float(gt), extracted
-    except (ValueError, AttributeError):
-        return extracted.strip() == gt.strip(), extracted
+    gt = str(example.get("answer", example.get("target", "")))
+    return _numbers_equal(extracted, gt), extracted
 
 
 def _generate_vllm(config, prompts):

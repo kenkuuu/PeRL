@@ -8,6 +8,38 @@ SYSTEM_PROMPT = (
     "numeric answer inside <answer>...</answer> tags."
 )
 
+# Units and symbols to strip before numeric comparison.
+_UNIT_PATTERN = re.compile(
+    r"[$€£¥₹]"                         # currency symbols (prefix)
+    r"|"
+    r"(?<!\S)"                          # unit suffixes (only when preceded by space or start)
+    r"(?:dollars?|cents?|euros?|pounds?|yen|yuan"
+    r"|km|m|cm|mm|kg|g|mg|lbs?|oz|ft|in|mi"
+    r"|hours?|hrs?|minutes?|mins?|seconds?|secs?"
+    r"|days?|weeks?|months?|years?"
+    r"|people|students?|items?|units?|pieces?|apples?|oranges?"
+    r"|%|percent|per\s+cent)"
+    r"\b.*$",
+    flags=re.IGNORECASE,
+)
+
+
+def _normalize_number(text: str) -> str:
+    """Strip units, currency and formatting from a candidate numeric string."""
+    text = text.strip()
+    text = _UNIT_PATTERN.sub("", text)
+    text = text.replace(",", "")   # remove thousand separators
+    return text.strip()
+
+
+def _numbers_equal(pred: str, gold: str) -> bool:
+    """Return True if pred and gold represent the same number after normalization."""
+    p, g = _normalize_number(pred), _normalize_number(gold)
+    try:
+        return abs(float(p) - float(g)) < 1e-6
+    except (ValueError, AttributeError):
+        return p == g
+
 
 def _extract_hash_answer(text: str) -> str | None:
     """Extract answer from GSM8K '#### <answer>' format."""
@@ -35,16 +67,10 @@ def format_reward(completions, **kwargs) -> list[float]:
 def accuracy_reward(completions, answer, **kwargs) -> list[float]:
     """Reward 1.0 if the extracted answer matches ground truth numerically."""
     contents = [completion[0]["content"] for completion in completions]
-    rewards = []
-    for content, gt in zip(contents, answer):
-        extracted = _extract_xml_answer(content)
-        try:
-            pred = float(extracted.replace(",", ""))
-            gold = float(str(gt).replace(",", ""))
-            rewards.append(1.0 if pred == gold else 0.0)
-        except (ValueError, AttributeError):
-            rewards.append(1.0 if extracted.strip() == str(gt).strip() else 0.0)
-    return rewards
+    return [
+        1.0 if _numbers_equal(_extract_xml_answer(c), str(gt)) else 0.0
+        for c, gt in zip(contents, answer)
+    ]
 
 
 def _make_conversation(example):
@@ -71,5 +97,5 @@ def load_gsm8k_dataset(dataset_name_or_path: str, example_numbers: int = None):
         "train_dataset": train_dataset,
         "test_dataset": test_dataset,
         "reward_functions": [accuracy_reward, format_reward],
-        "reward_weights": [2.0, 1.0],
+        "reward_weights": [1.0, 1.0],
     }
