@@ -7,7 +7,7 @@ LOG_FILE=${OUTPUT_DIR}/output.log
 
 mkdir -p ${OUTPUT_DIR}
 
-CUDA_VISIBLE_DEVICES=0,1,2,3 ACCELERATE_LOG_LEVEL=info FLASHINFER_DISABLE_VERSION_CHECK=1 \
+CUDA_VISIBLE_DEVICES=0,1,2,3 ACCELERATE_LOG_LEVEL=info FLASHINFER_DISABLE_VERSION_CHECK=1 PYTORCH_ALLOC_CONF=expandable_segments:True \
     accelerate launch \
     --main_process_port 29500 \
     --config_file recipes/trl/accelerate/ddp_4gpu.yaml \
@@ -31,7 +31,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 ACCELERATE_LOG_LEVEL=info FLASHINFER_DISABLE_VERSIO
     --config.training.remove_unused_columns false \
     --config.training.gradient_accumulation_steps 8 \
     --config.training.num_train_epochs 1 \
-    --config.training.max_completion_length 4096 \
+    --config.training.max_completion_length 1024 \
     --config.training.num_generations 8 \
     --config.training.warmup_ratio 0.1 \
     --config.training.max_prompt_length 512 \
