@@ -8,7 +8,7 @@ CHECKPOINT_PATH=${1:-""}
 OUTPUT_FILE="${CHECKPOINT_PATH:+${CHECKPOINT_PATH}/eval_gsm8k.json}"
 OUTPUT_FILE="${OUTPUT_FILE:-eval_gsm8k_base.json}"
 
-CUDA_VISIBLE_DEVICES=0 FLASHINFER_DISABLE_VERSION_CHECK=1 python modules/trl/eval_run.py \
+CUDA_VISIBLE_DEVICES=0,1,2,3 FLASHINFER_DISABLE_VERSION_CHECK=1 python modules/trl/eval_run.py \
     --model_name_or_path "Qwen/Qwen2.5-7B-Instruct" \
     --checkpoint_path "${CHECKPOINT_PATH}" \
     --dataset_name_or_path "gsm8k" \
@@ -17,6 +17,6 @@ CUDA_VISIBLE_DEVICES=0 FLASHINFER_DISABLE_VERSION_CHECK=1 python modules/trl/eva
     --seed 42 \
     --use_vllm true \
     --lora_rank 16 \
-    --tensor_parallel_size 1 \
+    --tensor_parallel_size 4 \
     --gpu_memory_utilization 0.9 \
     --output_file "${OUTPUT_FILE}"
