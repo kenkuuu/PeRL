@@ -1,4 +1,5 @@
 unset WANDB_DISABLED
+export FLASHINFER_DISABLE_VERSION_CHECK=1
 OUTPUT_DIR=outputs/dapo_pissa_qwen2_5_1_5b_$(date +%Y%m%d_%H%M%S)
 # OUTPUT_DIR=outputs/debug
 LOG_FILE=${OUTPUT_DIR}/output.log
