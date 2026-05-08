@@ -34,7 +34,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 ACCELERATE_LOG_LEVEL=info FLASHINFER_DISABLE_VERSIO
     --config.training.num_train_epochs 1 \
     --config.training.max_completion_length 1024 \
     --config.training.num_generations 8 \
-    --config.training.warmup_ratio 0.1 \
+    --config.training.warmup_ratio 0.0 \
     --config.training.max_prompt_length 512 \
     --config.training.logging_steps 1 \
     --config.training.per_device_train_batch_size 2 \
@@ -42,7 +42,8 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 ACCELERATE_LOG_LEVEL=info FLASHINFER_DISABLE_VERSIO
     --config.training.save_steps 64 \
     --config.training.max_steps 1024 \
     --config.training.use_vllm true \
-    --config.training.lr_scheduler_type "cosine" \
+    --config.training.lr_scheduler_type "constant" \
+    --config.training.lr_scheduler_kwargs.min_lr_rate 0.1 \
     --config.training.vllm_mode "colocate" \
     --config.training.vllm_gpu_memory_utilization 0.5 \
     --config.training.use_liger_kernel false \
