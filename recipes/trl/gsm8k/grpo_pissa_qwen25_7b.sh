@@ -45,7 +45,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 ACCELERATE_LOG_LEVEL=info FLASHINFER_DISABLE_VERSIO
     --config.training.lr_scheduler_type "constant" \
     --config.training.lr_scheduler_kwargs.min_lr_rate 0.1 \
     --config.training.vllm_mode "colocate" \
-    --config.training.vllm_gpu_memory_utilization 0.5 \
+    --config.training.vllm_gpu_memory_utilization 0.4 \
     --config.training.use_liger_kernel false \
     --config.training.top_entropy_quantile 0.0 \
     --config.training.loss_type "grpo" \
