@@ -45,6 +45,7 @@ def fuzzy_jobs(
         elif "wandb" in args.training.report_to:
             import wandb
             wandb.init(
+                project=args.logging.wandb_project,
                 name=args.training.run_name,
                 config=vars(args.training),
             )
