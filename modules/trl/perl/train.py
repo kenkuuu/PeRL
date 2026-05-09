@@ -94,6 +94,7 @@ def train(
     logger.info(f"Model loaded successfully")
 
     # 3. configure lora
+    optimizer = None
     if args.peft.use_peft:
         logger.info(f"Detected PEFT configuration, configuring lora")
         from perl.lora.adapter import apply_lora
