@@ -2,6 +2,7 @@
 # GRPO + PiSSA training on GSM8K with Qwen2.5-7B-Instruct (4x NVIDIA RTX A6000 48GB)
 # PiSSA uses fast SVD (pissa_niter_4) and lora_dropout=0 by design.
 
+export FLASHINFER_DISABLE_VERSION_CHECK=1
 unset WANDB_DISABLED
 OUTPUT_DIR=outputs/grpo_pissa_qwen25_1_5b_gsm8k_$(date +%Y%m%d_%H%M%S)
 LOG_FILE=${OUTPUT_DIR}/output.log
@@ -20,9 +21,9 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 ACCELERATE_LOG_LEVEL=info FLASHINFER_DISABLE_VERSIO
     --config.peft.use_peft true \
     --config.peft.type "pissa" \
     --config.peft.task_type "CAUSAL_LM" \
-    --config.peft.r 16 \
-    --config.peft.lora_alpha 32 \
-    --config.peft.lora_dropout 0.0 \
+    --config.peft.r 32 \
+    --config.peft.lora_alpha 64 \
+    --config.peft.lora_dropout 0.05 \
     --config.peft.total_step 1024 \
     --config.peft.target_modules '["q_proj","v_proj","k_proj","o_proj","up_proj","down_proj","gate_proj"]' \
     --config.training.learning_rate 1e-5 \
@@ -37,7 +38,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 ACCELERATE_LOG_LEVEL=info FLASHINFER_DISABLE_VERSIO
     --config.training.warmup_ratio 0.0 \
     --config.training.max_prompt_length 512 \
     --config.training.logging_steps 1 \
-    --config.training.per_device_train_batch_size 2 \
+    --config.training.per_device_train_batch_size 4 \
     --config.training.save_strategy "steps" \
     --config.training.save_steps 64 \
     --config.training.max_steps 1024 \
@@ -45,12 +46,12 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 ACCELERATE_LOG_LEVEL=info FLASHINFER_DISABLE_VERSIO
     --config.training.lr_scheduler_type "constant" \
     --config.training.lr_scheduler_kwargs.min_lr_rate 0.1 \
     --config.training.vllm_mode "colocate" \
-    --config.training.vllm_gpu_memory_utilization 0.5 \
+    --config.training.vllm_gpu_memory_utilization 0.2 \
     --config.training.use_liger_kernel false \
-    --config.training.top_entropy_quantile 0.0 \
+    --config.training.top_entropy_quantile 1.0 \
     --config.training.loss_type "grpo" \
     --config.training.report_to '["wandb"]' \
-    --config.logging.wandb_project "grpo-pissa-gsm8k" \
+    --config.logging.wandb_project "dapo-gsm8k-qwen25-15b" \
     --config.dataset.dataset_name_or_path "gsm8k" \
     --config.dataset.example_numbers 1000000000 \
     &> ${LOG_FILE}
