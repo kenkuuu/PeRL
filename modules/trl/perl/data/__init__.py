@@ -3,6 +3,7 @@ from .tinyzero import load_tinyzero_dataset
 from .count_down import load_count_down_dataset
 from .still import load_still_dataset
 from .gsm8k import load_gsm8k_dataset
+from .math import load_math_dataset
 
 from transformers import AutoTokenizer
 
@@ -22,5 +23,7 @@ def load_dataset(dataset_name_or_path: str, example_numbers: int = None, tokeniz
         return load_still_dataset(dataset_name_or_path, example_numbers)
     elif "gsm8k" in dataset_name_lower:
         return load_gsm8k_dataset(dataset_name_or_path, example_numbers)
+    elif "math" in dataset_name_lower:
+        return load_math_dataset(dataset_name_or_path, example_numbers)
     else:
         raise ValueError(f"Not supported dataset: {dataset_name_or_path}")

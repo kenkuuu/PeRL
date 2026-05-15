@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Dict, Any
+from typing import Dict, Any, List, Optional
 
 @dataclass
 class CommonConfig:
@@ -62,6 +62,7 @@ class TrainingConfig:
     per_device_train_batch_size: int = 1
     top_entropy_quantile: float = 0.2
     gradient_checkpointing: bool = False
+    gradient_checkpointing_kwargs: Optional[Dict[str, Any]] = None
 
 @dataclass
 class LoggingConfig:

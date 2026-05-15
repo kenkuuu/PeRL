@@ -97,12 +97,15 @@ def train(
     # 3. configure lora
     optimizer = None
     if args.peft.use_peft:
-        logger.info(f"Detected PEFT configuration, configuring lora")
-        from perl.lora.adapter import apply_lora
-        optimizer, model = apply_lora(model, args)
-        logger.info(f"Lora configured successfully")
+        logger.info(f"Detected PEFT configuration, configuring {args.peft.type}")
+        from perl.lora.adapter import apply_peft
+        optimizer, model = apply_peft(model, args)
+        logger.info(f"PEFT ({args.peft.type}) configured successfully")
 
     # 4.Training configuration - filter to only params accepted by this TRL version
+    # gradient_checkpointing with PEFT requires use_reentrant=False to avoid frozen-param issues
+    if args.training.gradient_checkpointing and not args.training.gradient_checkpointing_kwargs:
+        args.training.gradient_checkpointing_kwargs = {"use_reentrant": False}
     grpo_params = set(inspect.signature(GRPOConfig).parameters.keys())
     training_dict = {k: v for k, v in vars(args.training).items() if k in grpo_params}
     training_args = GRPOConfig(**training_dict)
