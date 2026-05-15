@@ -111,22 +111,26 @@ def train(
     training_args = GRPOConfig(**training_dict)
 
     # 5.Train
-    # Build optimizer explicitly to avoid empty param_group mismatch with DeepSpeed + cosine scheduler.
-    # Transformers' default optimizer creates 2 groups (with/without weight decay); DeepSpeed drops empty
-    # groups, leaving fewer groups than the scheduler expects.
+    # Use a single param group to prevent any empty-group removal by DeepSpeed/Accelerate.
     if optimizer is None:
         from torch.optim import AdamW
-        no_decay = ["bias", "LayerNorm.weight"]
-        with_decay = [p for n, p in model.named_parameters()
-                      if p.requires_grad and not any(nd in n for nd in no_decay)]
-        without_decay = [p for n, p in model.named_parameters()
-                         if p.requires_grad and any(nd in n for nd in no_decay)]
-        param_groups = []
-        if with_decay:
-            param_groups.append({"params": with_decay, "weight_decay": 0.01})
-        if without_decay:
-            param_groups.append({"params": without_decay, "weight_decay": 0.0})
-        optimizer = AdamW(param_groups, lr=args.training.learning_rate)
+        trainable_params = [p for p in model.parameters() if p.requires_grad]
+        optimizer = AdamW(trainable_params, lr=args.training.learning_rate)
+
+    # Create scheduler explicitly from the same optimizer so param_group counts are always in sync.
+    # Passing (optimizer, scheduler) prevents Trainer/DeepSpeed from creating a mismatched scheduler.
+    from transformers.optimization import get_scheduler as _get_scheduler
+    _num_warmup = int(args.training.warmup_ratio * args.training.max_steps)
+    _sched_kwargs: dict = dict(
+        name=args.training.lr_scheduler_type,
+        optimizer=optimizer,
+        num_warmup_steps=_num_warmup,
+        num_training_steps=args.training.max_steps,
+    )
+    if "scheduler_specific_kwargs" in inspect.signature(_get_scheduler).parameters \
+            and args.training.lr_scheduler_kwargs:
+        _sched_kwargs["scheduler_specific_kwargs"] = args.training.lr_scheduler_kwargs
+    scheduler = _get_scheduler(**_sched_kwargs)
 
     logger.info(f"Training model with GRPO")
     trainer_params = set(inspect.signature(GRPOTrainer.__init__).parameters.keys())
@@ -136,7 +140,7 @@ def train(
         reward_funcs=reward_functions,
         args=training_args,
         train_dataset=train_dataset,
-        optimizers=(optimizer, None),
+        optimizers=(optimizer, scheduler),
     )
     if "reward_weights" in trainer_params:
         trainer_kwargs["reward_weights"] = reward_weights
