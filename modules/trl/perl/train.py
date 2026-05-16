@@ -145,6 +145,14 @@ def train(
     if "reward_weights" in trainer_params:
         trainer_kwargs["reward_weights"] = reward_weights
     trainer = GRPOTrainer(**trainer_kwargs)
+
+    # Release PyTorch CUDA allocator fragments after every step to prevent
+    # gradual fragmentation from accumulating and starving large logit allocations.
+    from transformers import TrainerCallback
+    class _ClearCacheCallback(TrainerCallback):
+        def on_step_end(self, args, state, control, **kwargs):
+            torch.cuda.empty_cache()
+    trainer.add_callback(_ClearCacheCallback())
     
     # 支持从 checkpoint 恢复训练
     resume_checkpoint = args.training.resume_from_checkpoint
